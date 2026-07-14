@@ -60,9 +60,17 @@ class AtlasConfig:
     adaptive_mutation: bool = True
     mutation_boost: float = 2.0  # Multiply rates when diversity is low
     
+    # Diversity injection
+    immigrant_rate: float = 0.05  # Fraction of population replaced by random immigrants
+    
+    # Local search: when >N clusters stable, do weight-only refinement
+    local_search_trigger: int = 5  # Min clusters to trigger local search
+    local_search_prob: float = 0.3  # Prob of weight-only mutation when in local search
+    
     # Termination
     max_generations: int = 100
     fitness_threshold: float = 500.0
+    patience: int = 20  # Early stopping patience (generations without improvement)
 
 
 class AtlasNEAT:
@@ -138,8 +146,11 @@ class AtlasNEAT:
         for genome in self.population.values():
             if genome.fitness is None:
                 raw_fitness = eval_func(genome)
+                genome.raw_fitness = raw_fitness
                 # Store adjusted fitness for selection
                 genome.adjusted_fitness = self._compute_adjusted_fitness(genome)
+                # Use adjusted fitness as the main fitness for selection
+                genome.fitness = genome.adjusted_fitness
     
     def update_archive(self):
         """Add all population members to the archive."""
@@ -234,6 +245,18 @@ class AtlasNEAT:
                 mut_config['node_add_prob'] = min(1.0, mut_config['node_add_prob'] * 2)
                 mut_config['activation_mutate_rate'] = min(1.0, mut_config['activation_mutate_rate'] * 2)
                 child.mutate(mut_config)
+            elif (len(self.archive.clusters) >= self.config.local_search_trigger and 
+                  random.random() < self.config.local_search_prob):
+                # Local search: weight-only mutation for fine-tuning
+                mut_config = self.get_mutation_config()
+                mut_config['conn_add_prob'] = 0
+                mut_config['node_add_prob'] = 0
+                mut_config['conn_remove_prob'] = 0
+                mut_config['node_remove_prob'] = 0
+                mut_config['activation_mutate_rate'] = 0
+                mut_config['skip_add_prob'] = 0
+                mut_config['weight_mutate_power'] *= 0.5  # Smaller steps
+                child.mutate(mut_config)
             else:
                 child.mutate(self.get_mutation_config())
         else:
@@ -253,14 +276,27 @@ class AtlasNEAT:
         """Create the next generation with cluster-competitive allocation."""
         new_population = {}
         
-        # Elitism: keep best from archive
+        # Elitism: keep best from each cluster + global best
+        elites_added = 0
+        # Global best
         archive_best = self.archive.get_best()
         if archive_best is not None:
-            for i in range(self.config.elitism):
-                elite = copy.deepcopy(archive_best)
+            elite = copy.deepcopy(archive_best)
+            elite.key = self.next_genome_key
+            self.next_genome_key += 1
+            new_population[elite.key] = elite
+            elites_added += 1
+        
+        # Per-cluster elites (top genome from each cluster)
+        for cluster in self.archive.clusters.values():
+            if elites_added >= self.config.elitism:
+                break
+            if cluster.best_genome and cluster.best_genome.key not in new_population:
+                elite = copy.deepcopy(cluster.best_genome)
                 elite.key = self.next_genome_key
                 self.next_genome_key += 1
                 new_population[elite.key] = elite
+                elites_added += 1
         
         # Cluster-competitive offspring allocation
         # Better clusters get more offspring slots
@@ -296,6 +332,17 @@ class AtlasNEAT:
                         child.fitness = None
                         child.mutate(self.get_mutation_config())
                         new_population[child.key] = child
+        
+        # Diversity injection: add random immigrants
+        n_immigrants = int(self.config.pop_size * self.config.immigrant_rate)
+        for _ in range(n_immigrants):
+            if len(new_population) >= self.config.pop_size:
+                break
+            # Create a fresh random genome
+            immigrant = create_random_genome(self.next_genome_key, 
+                                            self.num_inputs, self.num_outputs)
+            self.next_genome_key += 1
+            new_population[immigrant.key] = immigrant
         
         # Fill any remaining slots
         while len(new_population) < self.config.pop_size:
@@ -370,6 +417,9 @@ class AtlasNEAT:
         print(f"  Population: {self.config.pop_size}")
         print(f"  Archive: Density-based (eps={self.archive.eps})")
         
+        best_ever = -9999.0
+        patience_counter = 0
+        
         for gen in range(generations):
             stats = self.run_generation(eval_func)
             
@@ -381,9 +431,21 @@ class AtlasNEAT:
             if callback:
                 callback(stats)
             
+            # Check improvement for early stopping
+            if stats['best_fitness'] > best_ever:
+                best_ever = stats['best_fitness']
+                patience_counter = 0
+            else:
+                patience_counter += 1
+            
             # Check termination
             if stats['best_fitness'] >= self.config.fitness_threshold:
                 print(f"Fitness threshold reached at generation {gen}!")
+                break
+            
+            # Early stopping
+            if patience_counter >= self.config.patience:
+                print(f"Early stopping at generation {gen} (no improvement for {patience_counter} gens)")
                 break
         
         return {
