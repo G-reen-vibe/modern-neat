@@ -290,6 +290,7 @@ class GDTConfig:
     lr_weights: float = 1e-2
     lr_bias: float = 1e-2
     pg_steps: int = 3  # policy-gradient steps per individual per generation
+    entropy_coef: float = 0.0  # entropy regularization coefficient (0 = off)
 
     # topology growth
     n_candidate_edges: int = 16  # candidate edges sampled per individual per generation
@@ -304,6 +305,9 @@ class GDTConfig:
     # behavioral diversity
     n_behavior_clusters: int = 5
     diversity_penalty: float = 0.0  # subtracted from fitness if in a dense cluster
+    restart_on_convergence: bool = True  # restart bottom-X% when behavioral diversity collapses
+    restart_threshold: float = 0.1  # if avg pairwise behavior distance < this, restart
+    restart_fraction: float = 0.5  # fraction of population to restart
 
     # exploration: novelty-based auxiliary reward
     novelty_bonus: float = 0.0  # weight on novelty reward added to env reward
@@ -342,6 +346,9 @@ class GDTNEAT:
         # novelty archive: stores state-visitation descriptors (squared obs vectors)
         self._novelty_archive: Optional[np.ndarray] = None  # shape (n, obs_dim)
         self._novelty_archive_n = 0
+        # reusable env instance (avoid create/destroy overhead)
+        self._env = gym.make(env_name)
+        self._env.reset(seed=cfg.seed)
 
     # ------------------------------------------------------------------
     # Rollout + behavior collection
@@ -448,23 +455,19 @@ class GDTNEAT:
         The behavior descriptor is computed from the deterministic rollouts
         (so it reflects the policy's actual behavior, not exploration noise).
         """
-        env = gym.make(self.env_name)
-        env.reset(seed=self.cfg.seed)
-        try:
-            # deterministic eval rollouts
-            det_rewards = []
-            behs = []
-            for _ in range(self.cfg.n_episodes):
-                _, _, _, total, beh = self._rollout(ind.network, env, self.cfg.max_steps, stochastic=False)
-                det_rewards.append(total)
-                behs.append(beh)
-            # stochastic training rollouts
-            stoch_rollouts = []
-            for _ in range(self.cfg.n_episodes):
-                obs_list, act_list, rew_list, _, _ = self._rollout(ind.network, env, self.cfg.max_steps, stochastic=True)
-                stoch_rollouts.append((obs_list, act_list, rew_list))
-        finally:
-            env.close()
+        env = self._env
+        # deterministic eval rollouts
+        det_rewards = []
+        behs = []
+        for _ in range(self.cfg.n_episodes):
+            _, _, _, total, beh = self._rollout(ind.network, env, self.cfg.max_steps, stochastic=False)
+            det_rewards.append(total)
+            behs.append(beh)
+        # stochastic training rollouts
+        stoch_rollouts = []
+        for _ in range(self.cfg.n_episodes):
+            obs_list, act_list, rew_list, _, _ = self._rollout(ind.network, env, self.cfg.max_steps, stochastic=True)
+            stoch_rollouts.append((obs_list, act_list, rew_list))
         return float(np.mean(det_rewards)), np.mean(behs, axis=0), stoch_rollouts
 
     # ------------------------------------------------------------------
@@ -504,11 +507,15 @@ class GDTNEAT:
         net.zero_grad(set_to_none=True)
         logits = net.action_logits(obs_t)
         log_probs = F.log_softmax(logits, dim=-1)
+        probs = F.softmax(logits, dim=-1)
         picked = log_probs.gather(1, act_t.unsqueeze(1)).squeeze(1)
         advantage = ret_t - baseline
         if advantage.std() > 1e-6:
             advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
-        loss = -(picked * advantage).mean()
+        pg_loss = -(picked * advantage).mean()
+        # entropy regularization: H(π) = -Σ π log π
+        entropy = -(probs * log_probs).sum(dim=-1).mean()
+        loss = pg_loss - self.cfg.entropy_coef * entropy
         loss.backward()
         with torch.no_grad():
             for p in net.parameters():
@@ -789,6 +796,44 @@ class GDTNEAT:
     # One generation
     # ------------------------------------------------------------------
 
+    def _maybe_restart(self) -> None:
+        """If behavioral diversity has collapsed, restart the bottom fraction of
+        the population with random initial weights. This is a population-level
+        'mutation' that helps escape local optima (especially on sparse-reward
+        tasks where the whole population can converge to a bad policy).
+        """
+        if not self.cfg.restart_on_convergence or len(self.population) < 4:
+            return
+        # only consider individuals with behavior descriptors
+        behs_list = [ind.behavior for ind in self.population if ind.behavior is not None]
+        if len(behs_list) < 4:
+            return  # not enough data
+        behs = np.array(behs_list)
+        # average pairwise distance
+        n = len(behs)
+        k = min(n, 20)
+        idx = np.random.choice(n, k, replace=False)
+        sample = behs[idx]
+        dists = []
+        for i in range(k):
+            for j in range(i + 1, k):
+                dists.append(np.linalg.norm(sample[i] - sample[j]))
+        avg_dist = float(np.mean(dists)) if dists else 0.0
+        if avg_dist > self.cfg.restart_threshold:
+            return  # diversity is fine
+        # restart bottom fraction (by fitness, among those with behavior)
+        order = sorted(range(len(self.population)),
+                       key=lambda i: self.population[i].fitness if self.population[i].behavior is not None else -1e18)
+        n_restart = max(1, int(len(self.population) * self.cfg.restart_fraction))
+        for i in order[:n_restart]:
+            net = GDTNetwork(self.cfg.n_inputs, self.cfg.n_outputs,
+                             output_activation=self.cfg.output_activation,
+                             hidden_activation=self.cfg.hidden_activation)
+            for ii in net.input_ids:
+                for jj in net.output_ids:
+                    net.add_edge(ii, jj, float(np.random.uniform(-self.cfg.init_weight_scale, self.cfg.init_weight_scale)))
+            self.population[i] = Individual(network=net)
+
     def step(self) -> Dict[str, float]:
         cfg = self.cfg
         # 1. Evaluate all individuals (and collect rollout data for reuse)
@@ -836,6 +881,8 @@ class GDTNEAT:
         self.history.append(stat)
         # 7. Reproduce
         self._reproduce()
+        # 8. Restart on convergence (escape local optima)
+        self._maybe_restart()
         return stat
 
     def run(self, n_generations: int, verbose: bool = True) -> None:
