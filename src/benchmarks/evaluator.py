@@ -154,6 +154,8 @@ def run_neat_trial(env_name, num_inputs, num_outputs, generations,
     config.genome_config.num_outputs = num_outputs
     config.genome_config.num_hidden = 0
     config.genome_config.initial_connection = 'full'
+    config.genome_config.input_keys = list(range(num_inputs))
+    config.genome_config.output_keys = list(range(num_inputs, num_inputs + num_outputs))
     config.pop_size = pop_size
     
     history = {
