@@ -80,6 +80,8 @@ class PTConfig:
     init_weight_scale: float = 0.5
     output_activation: str = "tanh"
     hidden_activation: str = "tanh"
+    normalize_obs: bool = True  # normalize observations for prediction loss
+    obs_norm_decay: float = 0.99  # EMA decay for running mean/var
 
 
 # ---------------------------------------------------------------------------
@@ -349,6 +351,30 @@ class PTNEAT:
         self._prune_counter: Dict[int, Dict[Tuple[int, int], int]] = defaultdict(dict)
         self._env = gym.make(env_name)
         self._env.reset(seed=cfg.seed)
+        # observation normalization (running mean/var)
+        self._obs_mean = np.zeros(cfg.n_inputs, dtype=np.float64)
+        self._obs_var = np.ones(cfg.n_inputs, dtype=np.float64)
+        self._obs_n = 0
+
+    # ------------------------------------------------------------------
+    # Observation normalization
+    # ------------------------------------------------------------------
+
+    def _normalize_obs(self, obs: np.ndarray) -> np.ndarray:
+        """Normalize observation using running mean/var."""
+        if not self.cfg.normalize_obs:
+            return obs
+        return (obs - self._obs_mean) / (np.sqrt(self._obs_var) + 1e-8)
+
+    def _update_obs_stats(self, obs_list: List[np.ndarray]) -> None:
+        """Update running mean/var with observed states."""
+        if not self.cfg.normalize_obs or not obs_list:
+            return
+        for obs in obs_list:
+            self._obs_n += 1
+            delta = obs - self._obs_mean
+            self._obs_mean += delta / self._obs_n
+            self._obs_var += self.cfg.obs_norm_decay * (delta * (obs - self._obs_mean) - self._obs_var)
 
     # ------------------------------------------------------------------
     # Rollout
@@ -369,7 +395,8 @@ class PTNEAT:
         net._build_numpy_cache()
         prev_pred_error = 0.0
         for _ in range(max_steps):
-            logits, prediction = net.forward_numpy(obs)
+            norm_obs = self._normalize_obs(obs)
+            logits, prediction = net.forward_numpy(norm_obs)
             e = np.exp(logits - np.max(logits))
             probs = e / e.sum()
             if stochastic:
@@ -385,13 +412,16 @@ class PTNEAT:
             # curiosity bonus: add previous prediction error to reward
             if stochastic and self.cfg.curiosity_coef > 0:
                 r = r + self.cfg.curiosity_coef * prev_pred_error
-            # compute current prediction error for next step's bonus
+            # compute current prediction error for next step's bonus (in normalized space)
             if stochastic:
-                actual_next = np.asarray(obs, dtype=np.float64)
+                actual_next = self._normalize_obs(obs)
                 prev_pred_error = float(np.mean((prediction - actual_next) ** 2))
             rew_list.append(r)
             if term or trunc:
                 break
+        # update obs stats
+        if stochastic:
+            self._update_obs_stats(obs_list)
         total = float(sum(rew_list))
         # behavior descriptor
         if obs_list:
@@ -458,12 +488,22 @@ class PTNEAT:
         for t in reversed(range(T)):
             G = rew_list[t] + gamma * G
             returns[t] = G
-        # convert to tensors
-        obs_t = torch.from_numpy(np.array(obs_list, dtype=np.float32))
+        # convert to tensors (normalize obs for prediction)
+        obs_arr = np.array(obs_list, dtype=np.float32)
+        if self.cfg.normalize_obs:
+            obs_norm = (obs_arr - self._obs_mean) / (np.sqrt(self._obs_var) + 1e-8)
+        else:
+            obs_norm = obs_arr
+        obs_t = torch.from_numpy(obs_norm.astype(np.float32))
         act_t = torch.from_numpy(np.array(act_list, dtype=np.int64))
         ret_t = torch.from_numpy(returns)
         pred_t = torch.from_numpy(np.array(pred_list, dtype=np.float32))
-        next_obs_t = torch.from_numpy(np.array(next_obs_list, dtype=np.float32))
+        next_obs_arr = np.array(next_obs_list, dtype=np.float32)
+        if self.cfg.normalize_obs:
+            next_obs_norm = (next_obs_arr - self._obs_mean) / (np.sqrt(self._obs_var) + 1e-8)
+        else:
+            next_obs_norm = next_obs_arr
+        next_obs_t = torch.from_numpy(next_obs_norm.astype(np.float32))
 
         net.zero_grad(set_to_none=True)
         policy_logits, state_pred = net.forward(obs_t)
