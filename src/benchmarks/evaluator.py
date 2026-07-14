@@ -4,6 +4,7 @@ Evaluation utilities for benchmarking neuroevolution algorithms.
 
 import gymnasium as gym
 import numpy as np
+import time
 from typing import Tuple, Optional
 
 from atlas_neat.genome import Genome, FeedForwardNetwork
@@ -121,7 +122,6 @@ def run_benchmark(env_name: str, algorithm: str, n_trials: int = 5,
         
         seed = seed_base + trial
         np.random.seed(seed)
-        random_state = np.random.get_state()
         
         if algorithm == 'neat':
             result = run_neat_trial(env_name, num_inputs, num_outputs,
@@ -145,7 +145,6 @@ def run_neat_trial(env_name, num_inputs, num_outputs, generations,
     """Run a single NEAT trial."""
     import neat
     
-    # Create config
     config_path = 'src/baselines/neat_config.ini'
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                         neat.DefaultSpeciesSet, neat.DefaultStagnation,
@@ -157,44 +156,6 @@ def run_neat_trial(env_name, num_inputs, num_outputs, generations,
     config.genome_config.initial_connection = 'full'
     config.pop_size = pop_size
     
-    # Create evaluator
-    evaluator = create_evaluator(env_name, episodes, max_steps, seed)
-    
-    def eval_genomes(genomes, config):
-        for genome_id, genome in genomes:
-            # Convert neat genome to our Genome for evaluation
-            # (Actually just use neat's network directly)
-            net = neat.nn.FeedForwardNetwork.create(genome, config)
-            env = gym.make(env_name)
-            
-            total_reward = 0.0
-            for ep in range(episodes):
-                obs, info = env.reset(seed=seed + ep)
-                episode_reward = 0.0
-                for step in range(max_steps):
-                    obs_flat = np.array(obs).flatten()
-                    action = net.activate(obs_flat)
-                    
-                    if isinstance(env.action_space, gym.spaces.Discrete):
-                        action = int(np.argmax(action))
-                    else:
-                        action = np.array(action).clip(env.action_space.low, 
-                                                        env.action_space.high)
-                    
-                    obs, reward, terminated, truncated, info = env.step(action)
-                    episode_reward += reward
-                    if terminated or truncated:
-                        break
-                total_reward += episode_reward
-            
-            env.close()
-            genome.fitness = total_reward / episodes
-    
-    p = neat.Population(config)
-    stats = neat.StatisticsReporter()
-    p.add_reporter(neat.StdOutReporter(True))
-    p.add_reporter(stats)
-    
     history = {
         'best_fitness': [],
         'avg_fitness': [],
@@ -202,35 +163,66 @@ def run_neat_trial(env_name, num_inputs, num_outputs, generations,
         'times': [],
     }
     
+    def eval_single(genome, cfg):
+        net = neat.nn.FeedForwardNetwork.create(genome, cfg)
+        env = gym.make(env_name)
+        total_reward = 0.0
+        for ep in range(episodes):
+            obs, info = env.reset(seed=seed + ep)
+            episode_reward = 0.0
+            for step in range(max_steps):
+                obs_flat = np.array(obs).flatten()
+                action = net.activate(obs_flat)
+                if isinstance(env.action_space, gym.spaces.Discrete):
+                    action = int(np.argmax(action))
+                else:
+                    action = np.array(action).clip(env.action_space.low, env.action_space.high)
+                obs, reward, terminated, truncated, info = env.step(action)
+                episode_reward += reward
+                if terminated or truncated:
+                    break
+            total_reward += episode_reward
+        env.close()
+        return total_reward / episodes
+    
+    def eval_genomes(genomes, cfg):
+        for genome_id, genome in genomes:
+            genome.fitness = eval_single(genome, cfg)
+    
+    # Track per-generation stats
+    gen_start = [0]
+    
+    class Tracker:
+        def start_generation(self, gen):
+            gen_start[0] = time.time()
+        def post_evaluate(self, cfg, pop, species, best):
+            fitnesses = [g.fitness for g in pop.values() if g.fitness is not None]
+            best_f = max(fitnesses) if fitnesses else 0
+            avg_f = sum(fitnesses) / len(fitnesses) if fitnesses else 0
+            history['best_fitness'].append(best_f)
+            history['avg_fitness'].append(avg_f)
+            history['n_species'].append(len(species.species))
+            history['times'].append(time.time() - gen_start[0])
+        def info(self, msg):
+            pass
+        def complete_extinction(self):
+            pass
+        def found_solution(self, cfg, gen, best):
+            pass
+        def species_stagnant(self, sid, species):
+            pass
+        def end_generation(self, cfg, pop, species):
+            pass
+        def post_reproduction(self, cfg, pop, species):
+            pass
+    
+    p = neat.Population(config)
+    p.add_reporter(Tracker())
+    
     start_time = time.time()
-    
-    for gen in range(generations):
-        gen_start = time.time()
-        
-        genomes = list(p.population.items())
-        eval_genomes(genomes, config)
-        p.population = dict(genomes)
-        
-        fitnesses = [g.fitness for _, g in genomes if g.fitness is not None]
-        best = max(fitnesses) if fitnesses else 0
-        avg = sum(fitnesses) / len(fitnesses) if fitnesses else 0
-        
-        p.reporters.start_generation(p.generation, p.config)
-        p.population = p.reproduction.reproduce(p.config, p.species, p.config.pop_size, p.generation)
-        p.species.speciate(p.config, p.population, p.generation)
-        p.reporters.post_evaluate(p.config, p.population, p.species, best)
-        
-        n_species = len(p.species.species)
-        gen_time = time.time() - gen_start
-        
-        history['best_fitness'].append(best)
-        history['avg_fitness'].append(avg)
-        history['n_species'].append(n_species)
-        history['times'].append(gen_time)
-        
-        p.generation += 1
-    
+    p.run(eval_genomes, generations)
     history['total_time'] = time.time() - start_time
+    
     return history
 
 
@@ -242,7 +234,6 @@ def run_atlas_trial(env_name, num_inputs, num_outputs, generations,
     
     from atlas_neat.atlas_neat import AtlasNEAT, AtlasConfig
     
-    # Override fitness threshold based on environment
     config = AtlasConfig(
         pop_size=pop_size,
         max_generations=generations,
@@ -277,7 +268,6 @@ def aggregate_results(all_results):
         'time_std': [],
     }
     
-    # Check if coverage exists (Atlas-NEAT only)
     has_coverage = 'coverage' in all_results[0]
     if has_coverage:
         agg['coverage_mean'] = []
@@ -313,12 +303,9 @@ def aggregate_results(all_results):
             agg['qd_score_mean'].append(float(np.mean(qd)))
             agg['qd_score_std'].append(float(np.std(qd)))
     
-    # Total time
     total_times = [r.get('total_time', sum(r['times'])) for r in all_results]
     agg['total_time_mean'] = float(np.mean(total_times))
     agg['total_time_std'] = float(np.std(total_times))
-    
-    # Success rate (if we can determine threshold)
     agg['n_trials'] = len(all_results)
     
     return agg
