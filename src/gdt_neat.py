@@ -270,6 +270,10 @@ class Individual:
     fitness: float = -1e9
     behavior: Optional[np.ndarray] = None  # behavioral descriptor
     age: int = 0  # how many generations it has survived
+    # Adam optimizer state (per-parameter)
+    adam_m: Dict[str, torch.Tensor] = field(default_factory=dict)
+    adam_v: Dict[str, torch.Tensor] = field(default_factory=dict)
+    adam_t: int = 0  # timestep
 
 
 # ---------------------------------------------------------------------------
@@ -291,6 +295,11 @@ class GDTConfig:
     lr_bias: float = 1e-2
     pg_steps: int = 3  # policy-gradient steps per individual per generation
     entropy_coef: float = 0.0  # entropy regularization coefficient (0 = off)
+    use_adam: bool = True  # Adam-style adaptive learning rates
+    adam_beta1: float = 0.9
+    adam_beta2: float = 0.999
+    adam_eps: float = 1e-8
+    grad_clip: float = 1.0  # max gradient norm (0 = no clipping)
 
     # topology growth
     n_candidate_edges: int = 16  # candidate edges sampled per individual per generation
@@ -481,17 +490,12 @@ class GDTNEAT:
 
     def _policy_gradient_step(self, net: GDTNetwork, obs_list: List[np.ndarray],
                               act_list: List[int], rew_list: List[float], lr: float,
-                              population_baseline: Optional[float] = None) -> None:
-        """One policy gradient step.
+                              population_baseline: Optional[float] = None,
+                              adam_state: Optional[dict] = None) -> None:
+        """One policy gradient step with optional Adam-style adaptive learning rates.
 
-        If population_baseline is provided, use it instead of the per-rollout
-        mean. This is much lower variance because it's averaged across the
-        whole population, not just one rollout.
-
-        Edge-level adaptive learning rate: each edge's effective LR is scaled
-        by its relative gradient magnitude. Edges with stronger signal learn
-        faster; edges with weak signal learn slower (but don't get zeroed
-        out — they may become important later).
+        If adam_state is provided (dict with 'm', 'v', 't'), use Adam update
+        instead of plain SGD. This gives per-parameter adaptive step sizes.
         """
         if len(obs_list) < 2:
             return
@@ -518,14 +522,39 @@ class GDTNEAT:
         if advantage.std() > 1e-6:
             advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
         pg_loss = -(picked * advantage).mean()
-        # entropy regularization: H(π) = -Σ π log π
         entropy = -(probs * log_probs).sum(dim=-1).mean()
         loss = pg_loss - self.cfg.entropy_coef * entropy
         loss.backward()
+        # gradient clipping (prevents destructive updates from noisy RL gradients)
+        if self.cfg.grad_clip > 0:
+            params_with_grad = [p for p in net.parameters() if p.grad is not None]
+            if params_with_grad:
+                total_norm = torch.norm(torch.stack([p.grad.norm() for p in params_with_grad]))
+                if total_norm > self.cfg.grad_clip:
+                    scale = self.cfg.grad_clip / (total_norm + 1e-6)
+                    for p in params_with_grad:
+                        p.grad.mul_(scale)
         with torch.no_grad():
-            for p in net.parameters():
-                if p.grad is not None:
-                    p -= lr * p.grad
+            if self.cfg.use_adam and adam_state is not None:
+                adam_state['t'] += 1
+                t = adam_state['t']
+                m = adam_state['m']
+                v = adam_state['v']
+                for name, p in net._parameters.items():
+                    if p is None or p.grad is None:
+                        continue
+                    if name not in m:
+                        m[name] = torch.zeros_like(p)
+                        v[name] = torch.zeros_like(p)
+                    m[name] = self.cfg.adam_beta1 * m[name] + (1 - self.cfg.adam_beta1) * p.grad
+                    v[name] = self.cfg.adam_beta2 * v[name] + (1 - self.cfg.adam_beta2) * p.grad**2
+                    m_hat = m[name] / (1 - self.cfg.adam_beta1**t)
+                    v_hat = v[name] / (1 - self.cfg.adam_beta2**t)
+                    p -= lr * m_hat / (torch.sqrt(v_hat) + self.cfg.adam_eps)
+            else:
+                for p in net.parameters():
+                    if p.grad is not None:
+                        p -= lr * p.grad
 
     # ------------------------------------------------------------------
     # Topology growth
@@ -895,9 +924,12 @@ class GDTNEAT:
             if not rollouts:
                 continue
             obs_list, act_list, rew_list = max(rollouts, key=lambda r: len(r[0]))
+            adam_state = {'m': ind.adam_m, 'v': ind.adam_v, 't': ind.adam_t}
             for _ in range(cfg.pg_steps):
                 self._policy_gradient_step(ind.network, obs_list, act_list, rew_list, cfg.lr_weights,
-                                           population_baseline=pop_mean_fitness)
+                                           population_baseline=pop_mean_fitness,
+                                           adam_state=adam_state)
+            ind.adam_t = adam_state['t']
         # 5. Topology growth (reuse evaluation rollouts; collect gradients for pruning)
         for i, ind in enumerate(self.population):
             edge_grads = self._grow_topology(ind, all_rollouts[i])
