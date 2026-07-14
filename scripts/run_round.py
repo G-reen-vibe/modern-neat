@@ -19,13 +19,50 @@ OUT_BASE = "/home/z/my-project/modern-neat/results/gdt"
 
 
 def get_round_config(round_n: int) -> dict:
-    """Return config kwargs for each round. Round 1 = baseline GDT-NEAT."""
+    """Return config kwargs for each round."""
     configs = {
         1: dict(  # baseline GDT-NEAT
             pop_size=30, n_episodes=2, max_steps=500, seed=0,
             lr_weights=1e-2, pg_steps=3,
             n_candidate_edges=16, edges_to_add=1, p_split_edge=0.1,
             diversity_penalty=0.0, n_behavior_clusters=5,
+        ),
+        2: dict(  # gradient-based pruning (unify all structural decisions under gradient)
+            pop_size=30, n_episodes=2, max_steps=500, seed=0,
+            lr_weights=1e-2, pg_steps=3,
+            n_candidate_edges=16, edges_to_add=1, p_split_edge=0.1,
+            prune_threshold=1e-3, prune_grad_threshold=1e-4, prune_patience=3,
+            diversity_penalty=0.0, n_behavior_clusters=5,
+        ),
+        3: dict(  # diversity penalty on (exploration)
+            pop_size=30, n_episodes=2, max_steps=500, seed=0,
+            lr_weights=1e-2, pg_steps=3,
+            n_candidate_edges=16, edges_to_add=1, p_split_edge=0.1,
+            prune_threshold=1e-3, prune_grad_threshold=1e-4, prune_patience=3,
+            diversity_penalty=20.0, n_behavior_clusters=5,
+        ),
+        4: dict(  # stochastic action selection (sample from softmax policy)
+            pop_size=30, n_episodes=2, max_steps=500, seed=0,
+            lr_weights=1e-2, pg_steps=3,
+            n_candidate_edges=16, edges_to_add=1, p_split_edge=0.1,
+            prune_threshold=1e-3, prune_grad_threshold=1e-4, prune_patience=3,
+            diversity_penalty=0.0, n_behavior_clusters=5,
+        ),
+        5: dict(  # novelty-augmented reward for exploration on sparse-reward tasks
+            pop_size=20, n_episodes=1, max_steps=500, seed=0,
+            lr_weights=1e-2, pg_steps=2,
+            n_candidate_edges=12, edges_to_add=1, p_split_edge=0.1,
+            prune_threshold=1e-3, prune_grad_threshold=1e-4, prune_patience=3,
+            diversity_penalty=0.0, n_behavior_clusters=5,
+            novelty_bonus=0.1, novelty_k=5, novelty_archive_size=200,
+        ),
+        6: dict(  # novelty with stronger bonus
+            pop_size=20, n_episodes=1, max_steps=500, seed=0,
+            lr_weights=1e-2, pg_steps=2,
+            n_candidate_edges=12, edges_to_add=1, p_split_edge=0.1,
+            prune_threshold=1e-3, prune_grad_threshold=1e-4, prune_patience=3,
+            diversity_penalty=0.0, n_behavior_clusters=5,
+            novelty_bonus=1.0, novelty_k=5, novelty_archive_size=500,
         ),
     }
     return configs.get(round_n, configs[1])

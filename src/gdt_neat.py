@@ -295,12 +295,18 @@ class GDTConfig:
     n_candidate_edges: int = 16  # candidate edges sampled per individual per generation
     edges_to_add: int = 1  # add top-K edges per generation
     p_split_edge: float = 0.2  # probability of splitting an edge to add a hidden node
-    prune_threshold: float = 1e-3  # prune edges with |weight| < this for `prune_patience` gens
+    prune_threshold: float = 1e-3  # weight magnitude threshold for pruning
+    prune_grad_threshold: float = 1e-4  # gradient magnitude threshold for pruning
     prune_patience: int = 3
 
     # behavioral diversity
     n_behavior_clusters: int = 5
     diversity_penalty: float = 0.0  # subtracted from fitness if in a dense cluster
+
+    # exploration: novelty-based auxiliary reward
+    novelty_bonus: float = 0.0  # weight on novelty reward added to env reward
+    novelty_k: int = 5  # k-nearest-neighbors for novelty computation
+    novelty_archive_size: int = 200  # max size of state-visitation archive
 
     # misc
     init_weight_scale: float = 0.5
@@ -331,15 +337,31 @@ class GDTNEAT:
         self.best_fitness: float = -1e9
         self.best_network: Optional[GDTNetwork] = None
         self._prune_counter: Dict[int, Dict[Tuple[int, int], int]] = defaultdict(dict)
+        # novelty archive: stores state-visitation descriptors (squared obs vectors)
+        self._novelty_archive: Optional[np.ndarray] = None  # shape (n, obs_dim)
+        self._novelty_archive_n = 0
 
     # ------------------------------------------------------------------
     # Rollout + behavior collection
     # ------------------------------------------------------------------
 
-    def _rollout(self, net: GDTNetwork, env, max_steps: int) -> Tuple[
+    def _rollout(self, net: GDTNetwork, env, max_steps: int, stochastic: bool = True) -> Tuple[
         List[np.ndarray], List[int], List[float], float, np.ndarray
     ]:
-        """Collect one rollout. Returns (obs_list, act_list, rew_list, total_reward, behavior_descriptor)."""
+        """Collect one rollout. Returns (obs_list, act_list, rew_list, total_reward, behavior_descriptor).
+
+        If novelty_bonus > 0, the reward at each step is augmented with a
+        novelty bonus: the distance from the current state to its k-nearest
+        neighbors in the novelty archive. This provides a dense learning
+        signal even on sparse-reward tasks like MountainCar.
+
+        If stochastic=True, actions are SAMPLED from the softmax policy
+        (needed for policy-gradient training to be on-policy). If
+        stochastic=False, actions are argmax (used for clean fitness
+        evaluation). The novelty bonus is only added to the stochastic
+        rollouts (training); the deterministic rollouts use pure env reward
+        for fitness evaluation.
+        """
         obs, _ = env.reset()
         obs_list, act_list, rew_list = [], [], []
         for _ in range(max_steps):
@@ -347,15 +369,25 @@ class GDTNEAT:
             with torch.no_grad():
                 logits = net.action_logits(obs_t)
                 probs = F.softmax(logits, dim=-1).numpy().flatten()
-            a = int(np.argmax(probs))
+            if stochastic:
+                a = int(np.random.choice(len(probs), p=probs))
+            else:
+                a = int(np.argmax(probs))
             obs_list.append(np.asarray(obs, dtype=np.float32).copy())
             act_list.append(a)
             obs, r, term, trunc, _ = env.step(a)
-            rew_list.append(float(r))
+            r = float(r)
+            # novelty bonus (only for stochastic / training rollouts)
+            if stochastic and self.cfg.novelty_bonus > 0:
+                nov = self._novelty_of_state(obs)
+                r = r + self.cfg.novelty_bonus * nov
+            rew_list.append(r)
             if term or trunc:
                 break
         total = float(sum(rew_list))
-        # behavior descriptor: mean(|obs|), std(obs), action histogram, episode length / max_steps
+        # update novelty archive with visited states (only for stochastic rollouts)
+        if stochastic and self.cfg.novelty_bonus > 0 and obs_list:
+            self._update_novelty_archive(obs_list)
         if obs_list:
             obs_arr = np.array(obs_list)
             act_arr = np.array(act_list)
@@ -373,19 +405,65 @@ class GDTNEAT:
             beh = np.zeros(2 * self.cfg.n_inputs + self.cfg.n_outputs + 1, dtype=np.float32)
         return obs_list, act_list, rew_list, total, beh
 
-    def _evaluate(self, ind: Individual) -> Tuple[float, np.ndarray]:
+    # ------------------------------------------------------------------
+    # Novelty archive
+    # ------------------------------------------------------------------
+
+    def _novelty_of_state(self, obs: np.ndarray) -> float:
+        """Novelty of a state = average distance to k nearest neighbors in archive."""
+        if self._novelty_archive is None or self._novelty_archive_n == 0:
+            return 1.0  # everything is novel when archive is empty
+        n = min(self._novelty_archive_n, self._novelty_archive.shape[0])
+        archive = self._novelty_archive[:n]
+        # squared euclidean distance
+        d = np.sqrt(np.sum((archive - obs) ** 2, axis=1))
+        k = min(self.cfg.novelty_k, n)
+        # average of k smallest
+        idx = np.argpartition(d, k - 1)[:k]
+        return float(np.mean(d[idx]))
+
+    def _update_novelty_archive(self, obs_list: List[np.ndarray]) -> None:
+        """Add observed states to the novelty archive (FIFO)."""
+        new_states = np.array(obs_list, dtype=np.float32)
+        max_size = self.cfg.novelty_archive_size
+        if self._novelty_archive is None:
+            self._novelty_archive = new_states[:max_size].copy()
+            self._novelty_archive_n = self._novelty_archive.shape[0]
+            return
+        # concatenate, then trim to most recent max_size
+        combined = np.concatenate([self._novelty_archive[:self._novelty_archive_n], new_states], axis=0)
+        if combined.shape[0] > max_size:
+            combined = combined[-max_size:]
+        self._novelty_archive = combined
+        self._novelty_archive_n = combined.shape[0]
+
+    def _evaluate(self, ind: Individual) -> Tuple[float, np.ndarray, List]:
+        """Evaluate individual. Returns (mean_reward, behavior, [stochastic_rollouts]).
+
+        We do:
+          - n_episodes deterministic rollouts (argmax) for fitness
+          - n_episodes stochastic rollouts (sampled) for policy gradient
+        The behavior descriptor is computed from the deterministic rollouts
+        (so it reflects the policy's actual behavior, not exploration noise).
+        """
         env = gym.make(self.env_name)
         env.reset(seed=self.cfg.seed)
         try:
-            rewards = []
+            # deterministic eval rollouts
+            det_rewards = []
             behs = []
             for _ in range(self.cfg.n_episodes):
-                _, _, _, total, beh = self._rollout(ind.network, env, self.cfg.max_steps)
-                rewards.append(total)
+                _, _, _, total, beh = self._rollout(ind.network, env, self.cfg.max_steps, stochastic=False)
+                det_rewards.append(total)
                 behs.append(beh)
+            # stochastic training rollouts
+            stoch_rollouts = []
+            for _ in range(self.cfg.n_episodes):
+                obs_list, act_list, rew_list, _, _ = self._rollout(ind.network, env, self.cfg.max_steps, stochastic=True)
+                stoch_rollouts.append((obs_list, act_list, rew_list))
         finally:
             env.close()
-        return float(np.mean(rewards)), np.mean(behs, axis=0)
+        return float(np.mean(det_rewards)), np.mean(behs, axis=0), stoch_rollouts
 
     # ------------------------------------------------------------------
     # Policy gradient step on weights
@@ -453,20 +531,22 @@ class GDTNEAT:
             candidates.append((i, j))
         return candidates
 
-    def _grow_topology(self, ind: Individual) -> None:
-        """Add the gradient-most-promising candidate edge(s)."""
+    def _grow_topology(self, ind: Individual, rollouts: List) -> Dict[Tuple[int, int], float]:
+        """Add the gradient-most-promising candidate edge(s).
+
+        Reuses the evaluation rollouts to compute the policy gradient (no
+        extra rollout needed).
+
+        Returns a dict mapping existing-edge-keys to their gradient magnitudes
+        (so the prune step can use the same gradient information).
+        """
         net = ind.network
-        if net.num_edges() == 0:
-            return
-        # collect a fresh rollout to compute policy gradient
-        env = gym.make(self.env_name)
-        env.reset(seed=self.cfg.seed)
-        try:
-            obs_list, act_list, rew_list, _, _ = self._rollout(net, env, self.cfg.max_steps)
-        finally:
-            env.close()
+        if net.num_edges() == 0 or not rollouts:
+            return {}
+        # use the longest rollout (most informative)
+        obs_list, act_list, rew_list = max(rollouts, key=lambda r: len(r[0]))
         if len(obs_list) < 2:
-            return
+            return {}
         # discounted returns
         gamma = 0.99
         T = len(rew_list)
@@ -480,15 +560,43 @@ class GDTNEAT:
         act_t = torch.from_numpy(np.array(act_list, dtype=np.int64))
         ret_t = torch.from_numpy(returns)
         candidates = self._candidate_edges(net, self.cfg.n_candidate_edges)
-        if not candidates:
-            return
-        grad_signal = net.candidate_edge_gradient(obs_t, act_t, ret_t, baseline, candidates)
-        # rank by absolute gradient signal
-        ranked = sorted(grad_signal.items(), key=lambda kv: abs(kv[1]), reverse=True)
-        for (i, j), g in ranked[: self.cfg.edges_to_add]:
-            # add the edge with a small initial weight in the direction of the gradient
+        # compute gradient on candidate edges AND on existing edges (one backward pass)
+        added_keys: List[Tuple[int, int]] = []
+        for key in candidates:
+            if key not in net.edges:
+                p = nn.Parameter(torch.zeros(1, dtype=torch.float32), requires_grad=True)
+                net.edges[key] = p
+                added_keys.append(key)
+        net.zero_grad(set_to_none=True)
+        logits = net.action_logits(obs_t)
+        log_probs = F.log_softmax(logits, dim=-1)
+        picked = log_probs.gather(1, act_t.unsqueeze(1)).squeeze(1)
+        advantage = ret_t - baseline
+        loss = -(picked * advantage).mean()
+        loss.backward()
+        # read gradients for ALL edges (existing + candidate)
+        all_grads: Dict[Tuple[int, int], float] = {}
+        for key, p in net.edges.items():
+            if p.grad is not None:
+                all_grads[key] = float(p.grad.item())
+            else:
+                all_grads[key] = 0.0
+        # rank candidates by abs(grad)
+        ranked_candidates = sorted(
+            [(k, all_grads[k]) for k in added_keys],
+            key=lambda kv: abs(kv[1]), reverse=True
+        )
+        # remove all candidate edges
+        for key in added_keys:
+            del net.edges[key]
+        net._topo_dirty = True
+        # add the chosen edges with small initial weight in gradient direction
+        for (i, j), g in ranked_candidates[: self.cfg.edges_to_add]:
             init_w = float(np.sign(g) * 0.1) if abs(g) > 1e-6 else 0.0
             net.add_edge(i, j, init_w)
+        # return existing-edge gradient magnitudes (for pruning)
+        existing_grads = {k: abs(v) for k, v in all_grads.items() if k not in added_keys}
+        return existing_grads
 
     def _maybe_split_edge(self, ind: Individual) -> None:
         """With some probability, split the largest-weight edge to add a hidden node."""
@@ -510,13 +618,22 @@ class GDTNEAT:
         net.add_edge(i, h, 1.0)
         net.add_edge(h, j, old_w)
 
-    def _prune(self, ind: Individual, ind_id: int) -> None:
-        """Prune edges that have stayed small for several generations."""
+    def _prune(self, ind: Individual, ind_id: int, edge_grad_norm: Dict[Tuple[int, int], float]) -> None:
+        """Prune edges whose gradient signal has been small for several generations.
+
+        Consistent with the core principle: gradient directs ALL structural
+        decisions, including pruning. An edge with a tiny gradient is not
+        contributing to the policy's improvement; it should be removed.
+        """
         net = ind.network
         to_remove = []
         for key, w in list(net.edges.items()):
-            mag = abs(float(w.item()))
-            if mag < self.cfg.prune_threshold:
+            # use gradient magnitude if available; fall back to weight magnitude
+            gmag = edge_grad_norm.get(key, 0.0)
+            wmag = abs(float(w.item()))
+            # an edge is "stagnant" if BOTH its gradient and its weight are small
+            stagnant = gmag < self.cfg.prune_grad_threshold and wmag < self.cfg.prune_threshold
+            if stagnant:
                 self._prune_counter[ind_id][key] = self._prune_counter[ind_id].get(key, 0) + 1
                 if self._prune_counter[ind_id][key] >= self.cfg.prune_patience:
                     to_remove.append(key)
@@ -644,11 +761,13 @@ class GDTNEAT:
 
     def step(self) -> Dict[str, float]:
         cfg = self.cfg
-        # 1. Evaluate all individuals
+        # 1. Evaluate all individuals (and collect rollout data for reuse)
+        all_rollouts: Dict[int, List] = {}
         for i, ind in enumerate(self.population):
-            f, beh = self._evaluate(ind)
+            f, beh, rollouts = self._evaluate(ind)
             ind.fitness = f
             ind.behavior = beh
+            all_rollouts[i] = rollouts
         # 2. Behavioral diversity penalty
         assign = self._cluster_behaviors()
         self._apply_diversity_penalty(assign)
@@ -657,21 +776,19 @@ class GDTNEAT:
         if self.population[best_idx].fitness > self.best_fitness:
             self.best_fitness = self.population[best_idx].fitness
             self.best_network = self._clone_network(self.population[best_idx].network)
-        # 4. Policy gradient on weights (use a fresh rollout)
+        # 4. Policy gradient on weights (reuse evaluation rollouts)
         for i, ind in enumerate(self.population):
-            env = gym.make(self.env_name)
-            env.reset(seed=cfg.seed)
-            try:
-                obs_list, act_list, rew_list, _, _ = self._rollout(ind.network, env, cfg.max_steps)
-            finally:
-                env.close()
+            rollouts = all_rollouts[i]
+            if not rollouts:
+                continue
+            obs_list, act_list, rew_list = max(rollouts, key=lambda r: len(r[0]))
             for _ in range(cfg.pg_steps):
                 self._policy_gradient_step(ind.network, obs_list, act_list, rew_list, cfg.lr_weights)
-        # 5. Topology growth
+        # 5. Topology growth (reuse evaluation rollouts; collect gradients for pruning)
         for i, ind in enumerate(self.population):
-            self._grow_topology(ind)
+            edge_grads = self._grow_topology(ind, all_rollouts[i])
             self._maybe_split_edge(ind)
-            self._prune(ind, i)
+            self._prune(ind, i, edge_grads)
         # 6. Stats
         fits = np.array([ind.fitness for ind in self.population])
         sizes = np.array([ind.network.num_edges() for ind in self.population])
