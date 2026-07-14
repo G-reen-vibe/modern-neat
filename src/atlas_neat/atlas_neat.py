@@ -126,7 +126,7 @@ class AtlasNEAT:
             self.archive.add(genome)
     
     def get_mutation_config(self) -> dict:
-        """Get mutation configuration, possibly adapted."""
+        """Get mutation configuration, possibly adapted based on progress."""
         config = {
             'weight_mutate_prob': self.config.weight_mutate_prob,
             'weight_mutate_power': self.config.weight_mutate_power,
@@ -142,9 +142,21 @@ class AtlasNEAT:
         }
         
         if self.config.adaptive_mutation:
-            coverage = self.archive.get_coverage()
-            if coverage < 0.3:
-                # Low diversity - boost mutation rates
+            # Check if progress has stalled
+            recent_best = self.history['best_fitness'][-5:] if len(self.history['best_fitness']) >= 5 else self.history['best_fitness']
+            if len(recent_best) >= 2 and recent_best[-1] <= recent_best[0] * 1.01:
+                # Progress stalled - boost structural mutations
+                stall_factor = min(3.0, 1.0 + (len(recent_best) - 1) * 0.5)
+                for key in ['conn_add_prob', 'node_add_prob', 'activation_mutate_rate',
+                           'conn_remove_prob', 'node_remove_prob']:
+                    config[key] = min(1.0, config[key] * stall_factor)
+                
+                # Also increase weight mutation power for more exploration
+                config['weight_mutate_power'] *= stall_factor
+            
+            # Boost when diversity is low
+            n_clusters = self.archive.get_n_clusters()
+            if n_clusters < 3:
                 boost = self.config.mutation_boost
                 for key in ['conn_add_prob', 'node_add_prob', 'activation_mutate_rate']:
                     config[key] = min(1.0, config[key] * boost)
@@ -171,7 +183,8 @@ class AtlasNEAT:
             # Archive well-populated - use archive selection
             parent = self.archive.sample_parent(
                 self.config.selection_method,
-                self.config.tournament_size
+                self.config.tournament_size,
+                self.config.novelty_weight
             )
             if parent is not None:
                 return parent
@@ -216,7 +229,7 @@ class AtlasNEAT:
         return child
     
     def create_next_generation(self):
-        """Create the next generation."""
+        """Create the next generation with cluster-competitive allocation."""
         new_population = {}
         
         # Elitism: keep best from archive
@@ -228,7 +241,41 @@ class AtlasNEAT:
                 self.next_genome_key += 1
                 new_population[elite.key] = elite
         
-        # Fill rest with offspring
+        # Cluster-competitive offspring allocation
+        # Better clusters get more offspring slots
+        if len(self.archive.clusters) >= 2:
+            # Compute cluster fitness shares
+            cluster_scores = {}
+            total_score = 0
+            for cid, cluster in self.archive.clusters.items():
+                # Score = best_fitness + novelty bonus for young clusters
+                age_penalty = max(0, 1.0 - cluster.age * 0.05)  # Young clusters get bonus
+                score = max(cluster.best_fitness, 0.01) * (1.0 + age_penalty)
+                cluster_scores[cid] = score
+                total_score += score
+            
+            # Allocate offspring slots proportionally
+            slots = self.config.pop_size - len(new_population)
+            cluster_slots = {}
+            for cid, score in cluster_scores.items():
+                cluster_slots[cid] = max(1, int(slots * score / total_score))
+            
+            # Create offspring for each cluster
+            for cid, n_slots in cluster_slots.items():
+                cluster = self.archive.clusters[cid]
+                for _ in range(n_slots):
+                    if len(new_population) >= self.config.pop_size:
+                        break
+                    # Create offspring from this cluster's representative
+                    if cluster.best_genome:
+                        child = copy.deepcopy(cluster.best_genome)
+                        child.key = self.next_genome_key
+                        self.next_genome_key += 1
+                        child.fitness = None
+                        child.mutate(self.get_mutation_config())
+                        new_population[child.key] = child
+        
+        # Fill any remaining slots
         while len(new_population) < self.config.pop_size:
             child = self.create_offspring()
             new_population[child.key] = child

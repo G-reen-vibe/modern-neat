@@ -152,7 +152,7 @@ class DensityArchive:
         # Remaining unassigned stays as noise
         self.noise_points = unassigned
     
-    def update(self):
+    def update(self, stagnation_limit: int = 15):
         """
         Update archive: form clusters from noise, update centroids, decay.
         Call this at the end of each generation.
@@ -165,8 +165,23 @@ class DensityArchive:
             cluster.update_centroid()
             cluster.age += 1
         
-        # Remove empty clusters
-        self.clusters = {cid: c for cid, c in self.clusters.items() if c.members}
+        # Remove empty or stagnant clusters
+        to_remove = []
+        for cid, cluster in self.clusters.items():
+            if not cluster.members:
+                to_remove.append(cid)
+            elif cluster.age > stagnation_limit:
+                # Check if cluster has improved recently
+                # (keep if it had a new member this generation)
+                if len(cluster.members) < self.min_samples:
+                    to_remove.append(cid)
+        
+        for cid in to_remove:
+            del self.clusters[cid]
+        
+        # Clear members for next generation
+        for cluster in self.clusters.values():
+            cluster.clear_members()
         
         self.generation += 1
     
@@ -203,27 +218,44 @@ class DensityArchive:
         return len(self.clusters)
     
     def sample_parent(self, selection_method: str = 'tournament',
-                     tournament_size: int = 5) -> Optional[Genome]:
-        """Sample a parent from clusters."""
+                     tournament_size: int = 5,
+                     novelty_weight: float = 0.3) -> Optional[Genome]:
+        """
+        Sample a parent from clusters with novelty bias.
+        Underexplored clusters (few members) are preferred to maintain diversity.
+        """
         if not self.clusters:
             return None
         
-        # Collect cluster bests
+        # Collect cluster representatives with novelty scores
         candidates = []
+        scores = []
+        
+        # Compute average members per cluster
+        avg_members = np.mean([len(c.members) for c in self.clusters.values()]) if self.clusters else 1
+        
         for cluster in self.clusters.values():
             if cluster.best_genome:
                 candidates.append(cluster.best_genome)
+                # Novelty = inverse of member count (rarer = more novel)
+                novelty = max(0.1, avg_members / max(len(cluster.members), 0.5))
+                fitness = max(cluster.best_fitness, 0.01)
+                # Combined score: fitness * novelty^novelty_weight
+                score = fitness * (novelty ** novelty_weight)
+                scores.append(score)
         
         if not candidates:
             return None
         
         if selection_method == 'tournament':
-            contestants = random.sample(candidates, min(tournament_size, len(candidates)))
-            return max(contestants, key=lambda g: g.fitness or -9999)
+            # Use novelty-weighted tournament
+            indices = list(range(len(candidates)))
+            selected = random.choices(indices, weights=scores, k=min(tournament_size, len(candidates)))
+            selected_candidates = [candidates[i] for i in selected]
+            return max(selected_candidates, key=lambda g: g.fitness or -9999)
         elif selection_method == 'roulette':
-            fitnesses = [max(g.fitness or 0, 0.01) for g in candidates]
-            total = sum(fitnesses)
-            probs = [f / total for f in fitnesses]
+            total = sum(scores)
+            probs = [s / total for s in scores]
             return candidates[np.random.choice(len(candidates), p=probs)]
         else:
             return random.choice(candidates)

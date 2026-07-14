@@ -30,9 +30,12 @@ class NodeGene:
         'leaky_relu': lambda x: np.where(x > 0, x, 0.01 * x),
         'swish': lambda x: x / (1.0 + np.exp(-np.clip(x, -500, 500))),
         'gelu': lambda x: 0.5 * x * (1 + np.tanh(0.7978845608 * (x + 0.044715 * x**3))),
+        'mish': lambda x: x * np.tanh(np.log(1 + np.exp(np.clip(x, -20, 20)))),
+        'elu': lambda x: np.where(x > 0, x, 1.0 * (np.exp(x) - 1)),
+        'selu': lambda x: 1.0507 * np.where(x > 0, x, 1.6733 * (np.exp(x) - 1)),
         'sin': np.sin,
         'cos': np.cos,
-        'abs': np.abs,
+        'gaussian': lambda x: np.exp(-x**2),
         'identity': lambda x: x,
     }
     
@@ -108,6 +111,21 @@ class Genome:
             cls._innovation_counter += 1
         return cls._innovation_history[key]
     
+    def _compute_fan_in(self, node_id: int) -> int:
+        """Compute fan-in (number of incoming connections) for a node."""
+        return sum(1 for c in self.connections.values() 
+                  if c.enabled and c.out_node == node_id)
+    
+    def _kaiming_weight(self, out_node: int) -> float:
+        """Generate a weight using Kaiming/He initialization."""
+        fan_in = self._compute_fan_in(out_node)
+        if fan_in == 0:
+            # First connection to this node - use small random weight
+            return random.gauss(0, 0.1)
+        # He initialization: N(0, sqrt(2/fan_in))
+        std = np.sqrt(2.0 / fan_in)
+        return random.gauss(0, std)
+    
     def add_connection(self, in_node: int, out_node: int, 
                        weight: Optional[float] = None) -> bool:
         """Add a new connection between two nodes."""
@@ -116,7 +134,7 @@ class Genome:
         if in_node not in self.nodes or out_node not in self.nodes:
             return False
         if weight is None:
-            weight = random.gauss(0, 1)
+            weight = self._kaiming_weight(out_node)
         
         innov = self.get_innovation_number(in_node, out_node)
         self.connections[(in_node, out_node)] = ConnectionGene(
@@ -278,6 +296,30 @@ class Genome:
         
         del self.nodes[node_id]
     
+    def mutate_add_skip(self, add_prob: float = 0.05):
+        """Add a skip connection (ResNet-style) between non-consecutive layers."""
+        if random.random() >= add_prob:
+            return
+        
+        # Find all pairs of nodes where we can add a skip connection
+        # (nodes that don't already have a direct connection)
+        candidates = []
+        for i, n1 in self.nodes.items():
+            for j, n2 in self.nodes.items():
+                if i == j:
+                    continue
+                if n1.node_type == 'output' or n2.node_type == 'input':
+                    continue
+                if (i, j) in self.connections:
+                    continue
+                # Check if there's already a path (don't skip too far)
+                candidates.append((i, j))
+        
+        if candidates:
+            in_id, out_id = random.choice(candidates)
+            # Skip connections use small initial weights
+            self.add_connection(in_id, out_id, random.gauss(0, 0.01))
+    
     def mutate(self, config: dict):
         """Apply all mutation operators."""
         self.mutate_weight(
@@ -292,6 +334,7 @@ class Genome:
         self.mutate_activation(config.get('activation_mutate_rate', 0.1))
         self.mutate_add_connection(config.get('conn_add_prob', 0.2))
         self.mutate_add_node(config.get('node_add_prob', 0.2))
+        self.mutate_add_skip(config.get('skip_add_prob', 0.05))
         self.mutate_toggle_connection(config.get('toggle_prob', 0.01))
         self.mutate_remove_connection(config.get('conn_remove_prob', 0.1))
         self.mutate_remove_node(config.get('node_remove_prob', 0.05))
