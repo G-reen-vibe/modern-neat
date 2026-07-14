@@ -293,7 +293,9 @@ class GDTConfig:
 
     # topology growth
     n_candidate_edges: int = 16  # candidate edges sampled per individual per generation
-    edges_to_add: int = 1  # add top-K edges per generation
+    edges_to_add: int = 1  # baseline number of edges to add per generation
+    adaptive_edges: bool = True  # if True, add more edges when gradient is strong
+    adaptive_edge_threshold: float = 0.01  # gradient magnitude above which we add extra edges
     p_split_edge: float = 0.2  # probability of splitting an edge to add a hidden node
     prune_threshold: float = 1e-3  # weight magnitude threshold for pruning
     prune_grad_threshold: float = 1e-4  # gradient magnitude threshold for pruning
@@ -470,10 +472,21 @@ class GDTNEAT:
     # ------------------------------------------------------------------
 
     def _policy_gradient_step(self, net: GDTNetwork, obs_list: List[np.ndarray],
-                              act_list: List[int], rew_list: List[float], lr: float) -> None:
+                              act_list: List[int], rew_list: List[float], lr: float,
+                              population_baseline: Optional[float] = None) -> None:
+        """One policy gradient step.
+
+        If population_baseline is provided, use it instead of the per-rollout
+        mean. This is much lower variance because it's averaged across the
+        whole population, not just one rollout.
+
+        Edge-level adaptive learning rate: each edge's effective LR is scaled
+        by its relative gradient magnitude. Edges with stronger signal learn
+        faster; edges with weak signal learn slower (but don't get zeroed
+        out — they may become important later).
+        """
         if len(obs_list) < 2:
             return
-        # compute discounted returns
         gamma = 0.99
         T = len(rew_list)
         returns = np.zeros(T, dtype=np.float32)
@@ -481,19 +494,22 @@ class GDTNEAT:
         for t in reversed(range(T)):
             G = rew_list[t] + gamma * G
             returns[t] = G
-        baseline = float(returns.mean())
+        if population_baseline is not None:
+            baseline = float(population_baseline)
+        else:
+            baseline = float(returns.mean())
         obs_t = torch.from_numpy(np.array(obs_list, dtype=np.float32))
         act_t = torch.from_numpy(np.array(act_list, dtype=np.int64))
         ret_t = torch.from_numpy(returns)
-        # zero grads
         net.zero_grad(set_to_none=True)
         logits = net.action_logits(obs_t)
         log_probs = F.log_softmax(logits, dim=-1)
         picked = log_probs.gather(1, act_t.unsqueeze(1)).squeeze(1)
         advantage = ret_t - baseline
+        if advantage.std() > 1e-6:
+            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
         loss = -(picked * advantage).mean()
         loss.backward()
-        # manual SGD update
         with torch.no_grad():
             for p in net.parameters():
                 if p.grad is not None:
@@ -590,9 +606,23 @@ class GDTNEAT:
         for key in added_keys:
             del net.edges[key]
         net._topo_dirty = True
-        # add the chosen edges with small initial weight in gradient direction
-        for (i, j), g in ranked_candidates[: self.cfg.edges_to_add]:
-            init_w = float(np.sign(g) * 0.1) if abs(g) > 1e-6 else 0.0
+        # decide how many edges to add (adaptive based on gradient strength)
+        n_to_add = self.cfg.edges_to_add
+        if self.cfg.adaptive_edges and ranked_candidates:
+            best_grad = abs(ranked_candidates[0][1])
+            # for each threshold multiple, add one extra edge
+            extra = int(best_grad / self.cfg.adaptive_edge_threshold)
+            n_to_add = min(n_to_add + extra, len(ranked_candidates))
+        # add the chosen edges with gradient-proportional initial weight
+        # edges with stronger gradient signal get larger initial weights
+        if ranked_candidates:
+            max_grad = max(abs(g) for _, g in ranked_candidates[:n_to_add]) or 1.0
+        else:
+            max_grad = 1.0
+        for (i, j), g in ranked_candidates[:n_to_add]:
+            # weight proportional to gradient, clipped to [-0.5, 0.5]
+            scale = abs(g) / (max_grad + 1e-8)
+            init_w = float(np.sign(g) * 0.5 * scale) if abs(g) > 1e-6 else 0.0
             net.add_edge(i, j, init_w)
         # return existing-edge gradient magnitudes (for pruning)
         existing_grads = {k: abs(v) for k, v in all_grads.items() if k not in added_keys}
@@ -776,14 +806,16 @@ class GDTNEAT:
         if self.population[best_idx].fitness > self.best_fitness:
             self.best_fitness = self.population[best_idx].fitness
             self.best_network = self._clone_network(self.population[best_idx].network)
-        # 4. Policy gradient on weights (reuse evaluation rollouts)
+        # 4. Policy gradient on weights (reuse evaluation rollouts; population baseline)
+        pop_mean_fitness = float(np.mean([ind.fitness for ind in self.population]))
         for i, ind in enumerate(self.population):
             rollouts = all_rollouts[i]
             if not rollouts:
                 continue
             obs_list, act_list, rew_list = max(rollouts, key=lambda r: len(r[0]))
             for _ in range(cfg.pg_steps):
-                self._policy_gradient_step(ind.network, obs_list, act_list, rew_list, cfg.lr_weights)
+                self._policy_gradient_step(ind.network, obs_list, act_list, rew_list, cfg.lr_weights,
+                                           population_baseline=pop_mean_fitness)
         # 5. Topology growth (reuse evaluation rollouts; collect gradients for pruning)
         for i, ind in enumerate(self.population):
             edge_grads = self._grow_topology(ind, all_rollouts[i])

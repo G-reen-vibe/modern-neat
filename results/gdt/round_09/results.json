@@ -1,0 +1,1544 @@
+{
+  "round": 9,
+  "config": {
+    "pop_size": 20,
+    "n_episodes": 1,
+    "max_steps": 500,
+    "seed": 0,
+    "lr_weights": 0.01,
+    "pg_steps": 2,
+    "n_candidate_edges": 12,
+    "edges_to_add": 1,
+    "adaptive_edges": true,
+    "adaptive_edge_threshold": 0.01,
+    "p_split_edge": 0.1,
+    "prune_threshold": 0.001,
+    "prune_grad_threshold": 0.0001,
+    "prune_patience": 3,
+    "diversity_penalty": 0.0,
+    "n_behavior_clusters": 5,
+    "novelty_bonus": 0.0
+  },
+  "gens": 20,
+  "seeds": 3,
+  "results": {
+    "CartPole-v1": [
+      {
+        "history": [
+          {
+            "gen": 0,
+            "best": 500.0,
+            "mean": 65.25,
+            "std": 113.45301891091307,
+            "avg_size": 8.3,
+            "avg_hidden": 0.15
+          },
+          {
+            "gen": 1,
+            "best": 500.0,
+            "mean": 152.9,
+            "std": 159.13418865850292,
+            "avg_size": 9.85,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 2,
+            "best": 500.0,
+            "mean": 313.95,
+            "std": 191.81566020531278,
+            "avg_size": 9.1,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 3,
+            "best": 500.0,
+            "mean": 377.8,
+            "std": 175.07786839003953,
+            "avg_size": 8.5,
+            "avg_hidden": 0.15
+          },
+          {
+            "gen": 4,
+            "best": 500.0,
+            "mean": 384.5,
+            "std": 185.2777644511073,
+            "avg_size": 8.4,
+            "avg_hidden": 0.1
+          },
+          {
+            "gen": 5,
+            "best": 500.0,
+            "mean": 364.45,
+            "std": 183.76002693730754,
+            "avg_size": 9.4,
+            "avg_hidden": 0.3
+          },
+          {
+            "gen": 6,
+            "best": 500.0,
+            "mean": 405.1,
+            "std": 158.1770843074306,
+            "avg_size": 9.5,
+            "avg_hidden": 0.4
+          },
+          {
+            "gen": 7,
+            "best": 500.0,
+            "mean": 399.0,
+            "std": 164.05944044766213,
+            "avg_size": 10.0,
+            "avg_hidden": 0.5
+          },
+          {
+            "gen": 8,
+            "best": 500.0,
+            "mean": 420.45,
+            "std": 147.63518381469913,
+            "avg_size": 9.85,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 9,
+            "best": 500.0,
+            "mean": 403.95,
+            "std": 172.31931841787213,
+            "avg_size": 9.4,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 10,
+            "best": 500.0,
+            "mean": 422.05,
+            "std": 126.14891002303588,
+            "avg_size": 9.55,
+            "avg_hidden": 0.4
+          },
+          {
+            "gen": 11,
+            "best": 500.0,
+            "mean": 392.4,
+            "std": 176.15203660474666,
+            "avg_size": 11.0,
+            "avg_hidden": 0.5
+          },
+          {
+            "gen": 12,
+            "best": 500.0,
+            "mean": 422.65,
+            "std": 165.45460857890902,
+            "avg_size": 10.65,
+            "avg_hidden": 0.45
+          },
+          {
+            "gen": 13,
+            "best": 500.0,
+            "mean": 460.7,
+            "std": 114.22701081618129,
+            "avg_size": 10.15,
+            "avg_hidden": 0.45
+          },
+          {
+            "gen": 14,
+            "best": 500.0,
+            "mean": 369.2,
+            "std": 208.64098350995187,
+            "avg_size": 12.0,
+            "avg_hidden": 0.75
+          },
+          {
+            "gen": 15,
+            "best": 500.0,
+            "mean": 441.3,
+            "std": 146.84008308360495,
+            "avg_size": 10.85,
+            "avg_hidden": 0.5
+          },
+          {
+            "gen": 16,
+            "best": 500.0,
+            "mean": 419.55,
+            "std": 155.55078752613247,
+            "avg_size": 10.1,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 17,
+            "best": 500.0,
+            "mean": 393.0,
+            "std": 185.18558259216616,
+            "avg_size": 9.9,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 18,
+            "best": 500.0,
+            "mean": 412.1,
+            "std": 177.33609333691777,
+            "avg_size": 10.15,
+            "avg_hidden": 0.4
+          },
+          {
+            "gen": 19,
+            "best": 500.0,
+            "mean": 434.35,
+            "std": 133.79659001633786,
+            "avg_size": 10.45,
+            "avg_hidden": 0.5
+          }
+        ],
+        "best_fitness": 500.0,
+        "elapsed": 13.467447757720947,
+        "final_avg_size": 10.45,
+        "final_avg_hidden": 0.5
+      },
+      {
+        "history": [
+          {
+            "gen": 0,
+            "best": 500.0,
+            "mean": 114.35,
+            "std": 177.00262003710566,
+            "avg_size": 8.0,
+            "avg_hidden": 0.0
+          },
+          {
+            "gen": 1,
+            "best": 500.0,
+            "mean": 276.85,
+            "std": 193.69261085544795,
+            "avg_size": 8.1,
+            "avg_hidden": 0.05
+          },
+          {
+            "gen": 2,
+            "best": 500.0,
+            "mean": 347.2,
+            "std": 202.7171921668214,
+            "avg_size": 8.0,
+            "avg_hidden": 0.0
+          },
+          {
+            "gen": 3,
+            "best": 500.0,
+            "mean": 437.4,
+            "std": 101.8461584940738,
+            "avg_size": 8.1,
+            "avg_hidden": 0.05
+          },
+          {
+            "gen": 4,
+            "best": 500.0,
+            "mean": 407.55,
+            "std": 150.75061359742455,
+            "avg_size": 8.2,
+            "avg_hidden": 0.1
+          },
+          {
+            "gen": 5,
+            "best": 500.0,
+            "mean": 463.95,
+            "std": 115.64362282460714,
+            "avg_size": 8.0,
+            "avg_hidden": 0.0
+          },
+          {
+            "gen": 6,
+            "best": 500.0,
+            "mean": 449.95,
+            "std": 118.71329959191598,
+            "avg_size": 8.3,
+            "avg_hidden": 0.15
+          },
+          {
+            "gen": 7,
+            "best": 500.0,
+            "mean": 429.9,
+            "std": 161.5604840299756,
+            "avg_size": 9.3,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 8,
+            "best": 500.0,
+            "mean": 462.8,
+            "std": 114.29986876632886,
+            "avg_size": 9.7,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 9,
+            "best": 500.0,
+            "mean": 412.25,
+            "std": 179.93384200866717,
+            "avg_size": 10.9,
+            "avg_hidden": 0.55
+          },
+          {
+            "gen": 10,
+            "best": 500.0,
+            "mean": 382.0,
+            "std": 205.19527285003423,
+            "avg_size": 11.75,
+            "avg_hidden": 0.7
+          },
+          {
+            "gen": 11,
+            "best": 500.0,
+            "mean": 418.25,
+            "std": 153.40106746695082,
+            "avg_size": 9.75,
+            "avg_hidden": 0.4
+          },
+          {
+            "gen": 12,
+            "best": 500.0,
+            "mean": 446.25,
+            "std": 127.96713445256168,
+            "avg_size": 9.9,
+            "avg_hidden": 0.55
+          },
+          {
+            "gen": 13,
+            "best": 500.0,
+            "mean": 447.85,
+            "std": 142.39286323408206,
+            "avg_size": 12.05,
+            "avg_hidden": 0.85
+          },
+          {
+            "gen": 14,
+            "best": 500.0,
+            "mean": 325.7,
+            "std": 216.2563525078512,
+            "avg_size": 13.7,
+            "avg_hidden": 1.1
+          },
+          {
+            "gen": 15,
+            "best": 500.0,
+            "mean": 451.5,
+            "std": 145.51237060813764,
+            "avg_size": 11.6,
+            "avg_hidden": 0.7
+          },
+          {
+            "gen": 16,
+            "best": 500.0,
+            "mean": 406.7,
+            "std": 169.20404841492416,
+            "avg_size": 14.4,
+            "avg_hidden": 1.1
+          },
+          {
+            "gen": 17,
+            "best": 500.0,
+            "mean": 440.7,
+            "std": 135.5345343445721,
+            "avg_size": 14.05,
+            "avg_hidden": 1.1
+          },
+          {
+            "gen": 18,
+            "best": 500.0,
+            "mean": 400.2,
+            "std": 177.47298385951592,
+            "avg_size": 11.7,
+            "avg_hidden": 0.8
+          },
+          {
+            "gen": 19,
+            "best": 500.0,
+            "mean": 415.75,
+            "std": 175.7486486434533,
+            "avg_size": 12.15,
+            "avg_hidden": 0.8
+          }
+        ],
+        "best_fitness": 500.0,
+        "elapsed": 14.326732635498047,
+        "final_avg_size": 12.15,
+        "final_avg_hidden": 0.8
+      },
+      {
+        "history": [
+          {
+            "gen": 0,
+            "best": 160.0,
+            "mean": 42.7,
+            "std": 43.933017196636975,
+            "avg_size": 8.1,
+            "avg_hidden": 0.05
+          },
+          {
+            "gen": 1,
+            "best": 181.0,
+            "mean": 95.7,
+            "std": 53.12824107760391,
+            "avg_size": 8.3,
+            "avg_hidden": 0.05
+          },
+          {
+            "gen": 2,
+            "best": 500.0,
+            "mean": 158.65,
+            "std": 100.17847822761134,
+            "avg_size": 8.2,
+            "avg_hidden": 0.1
+          },
+          {
+            "gen": 3,
+            "best": 500.0,
+            "mean": 244.65,
+            "std": 125.40545243329733,
+            "avg_size": 8.65,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 4,
+            "best": 500.0,
+            "mean": 295.15,
+            "std": 163.20394449889992,
+            "avg_size": 8.95,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 5,
+            "best": 500.0,
+            "mean": 384.45,
+            "std": 106.98339824477442,
+            "avg_size": 9.4,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 6,
+            "best": 500.0,
+            "mean": 360.85,
+            "std": 124.40871151169439,
+            "avg_size": 11.2,
+            "avg_hidden": 0.7
+          },
+          {
+            "gen": 7,
+            "best": 500.0,
+            "mean": 361.4,
+            "std": 148.69445181310564,
+            "avg_size": 11.3,
+            "avg_hidden": 0.75
+          },
+          {
+            "gen": 8,
+            "best": 500.0,
+            "mean": 376.3,
+            "std": 128.18116086227337,
+            "avg_size": 11.95,
+            "avg_hidden": 0.85
+          },
+          {
+            "gen": 9,
+            "best": 500.0,
+            "mean": 395.25,
+            "std": 141.86080325445786,
+            "avg_size": 12.1,
+            "avg_hidden": 0.85
+          },
+          {
+            "gen": 10,
+            "best": 500.0,
+            "mean": 425.15,
+            "std": 111.84152851244478,
+            "avg_size": 11.9,
+            "avg_hidden": 0.8
+          },
+          {
+            "gen": 11,
+            "best": 500.0,
+            "mean": 419.2,
+            "std": 120.65471395681149,
+            "avg_size": 11.6,
+            "avg_hidden": 0.75
+          },
+          {
+            "gen": 12,
+            "best": 500.0,
+            "mean": 431.3,
+            "std": 123.24329596371561,
+            "avg_size": 12.15,
+            "avg_hidden": 0.95
+          },
+          {
+            "gen": 13,
+            "best": 500.0,
+            "mean": 398.45,
+            "std": 125.5215021420633,
+            "avg_size": 14.1,
+            "avg_hidden": 1.25
+          },
+          {
+            "gen": 14,
+            "best": 500.0,
+            "mean": 276.35,
+            "std": 193.32673767484928,
+            "avg_size": 14.45,
+            "avg_hidden": 1.15
+          },
+          {
+            "gen": 15,
+            "best": 500.0,
+            "mean": 396.9,
+            "std": 141.20300988293417,
+            "avg_size": 14.5,
+            "avg_hidden": 1.2
+          },
+          {
+            "gen": 16,
+            "best": 500.0,
+            "mean": 343.45,
+            "std": 190.5994425490274,
+            "avg_size": 15.75,
+            "avg_hidden": 1.35
+          },
+          {
+            "gen": 17,
+            "best": 500.0,
+            "mean": 375.9,
+            "std": 183.25362206515865,
+            "avg_size": 15.2,
+            "avg_hidden": 1.3
+          },
+          {
+            "gen": 18,
+            "best": 500.0,
+            "mean": 389.7,
+            "std": 142.2888259843337,
+            "avg_size": 14.9,
+            "avg_hidden": 1.35
+          },
+          {
+            "gen": 19,
+            "best": 500.0,
+            "mean": 425.65,
+            "std": 121.81636794782546,
+            "avg_size": 15.75,
+            "avg_hidden": 1.35
+          }
+        ],
+        "best_fitness": 500.0,
+        "elapsed": 13.923523426055908,
+        "final_avg_size": 15.75,
+        "final_avg_hidden": 1.35
+      }
+    ],
+    "MountainCar-v0": [
+      {
+        "history": [
+          {
+            "gen": 0,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 6.0,
+            "avg_hidden": 0.0
+          },
+          {
+            "gen": 1,
+            "best": -126.0,
+            "mean": -196.3,
+            "std": 16.12792609110049,
+            "avg_size": 6.4,
+            "avg_hidden": 0.2
+          },
+          {
+            "gen": 2,
+            "best": -167.0,
+            "mean": -198.35,
+            "std": 7.192183256842111,
+            "avg_size": 6.0,
+            "avg_hidden": 0.0
+          },
+          {
+            "gen": 3,
+            "best": -125.0,
+            "mean": -194.7,
+            "std": 17.35540261705271,
+            "avg_size": 6.1,
+            "avg_hidden": 0.05
+          },
+          {
+            "gen": 4,
+            "best": -117.0,
+            "mean": -190.75,
+            "std": 24.012236463936464,
+            "avg_size": 6.2,
+            "avg_hidden": 0.1
+          },
+          {
+            "gen": 5,
+            "best": -117.0,
+            "mean": -186.85,
+            "std": 28.078951191239323,
+            "avg_size": 6.45,
+            "avg_hidden": 0.15
+          },
+          {
+            "gen": 6,
+            "best": -117.0,
+            "mean": -186.9,
+            "std": 28.053342046893455,
+            "avg_size": 6.0,
+            "avg_hidden": 0.0
+          },
+          {
+            "gen": 7,
+            "best": -118.0,
+            "mean": -182.65,
+            "std": 31.490117497399083,
+            "avg_size": 6.1,
+            "avg_hidden": 0.05
+          },
+          {
+            "gen": 8,
+            "best": -118.0,
+            "mean": -180.2,
+            "std": 34.314137028344454,
+            "avg_size": 6.45,
+            "avg_hidden": 0.15
+          },
+          {
+            "gen": 9,
+            "best": -117.0,
+            "mean": -183.85,
+            "std": 32.30677173596891,
+            "avg_size": 6.95,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 10,
+            "best": -117.0,
+            "mean": -179.7,
+            "std": 35.16546601425893,
+            "avg_size": 6.65,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 11,
+            "best": -116.0,
+            "mean": -182.25,
+            "std": 32.575872973720905,
+            "avg_size": 6.9,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 12,
+            "best": -117.0,
+            "mean": -187.75,
+            "std": 29.164833275710663,
+            "avg_size": 7.0,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 13,
+            "best": -117.0,
+            "mean": -186.3,
+            "std": 29.15150081899729,
+            "avg_size": 7.6,
+            "avg_hidden": 0.55
+          },
+          {
+            "gen": 14,
+            "best": -119.0,
+            "mean": -190.4,
+            "std": 24.575190741884384,
+            "avg_size": 7.75,
+            "avg_hidden": 0.6
+          },
+          {
+            "gen": 15,
+            "best": -119.0,
+            "mean": -188.5,
+            "std": 25.220031720836513,
+            "avg_size": 7.5,
+            "avg_hidden": 0.5
+          },
+          {
+            "gen": 16,
+            "best": -119.0,
+            "mean": -184.8,
+            "std": 28.479115154793693,
+            "avg_size": 6.95,
+            "avg_hidden": 0.3
+          },
+          {
+            "gen": 17,
+            "best": -119.0,
+            "mean": -182.85,
+            "std": 30.84521843009059,
+            "avg_size": 7.05,
+            "avg_hidden": 0.4
+          },
+          {
+            "gen": 18,
+            "best": -119.0,
+            "mean": -178.7,
+            "std": 33.38727302431272,
+            "avg_size": 6.5,
+            "avg_hidden": 0.2
+          },
+          {
+            "gen": 19,
+            "best": -118.0,
+            "mean": -184.15,
+            "std": 31.71636013164184,
+            "avg_size": 6.75,
+            "avg_hidden": 0.3
+          }
+        ],
+        "best_fitness": -116.0,
+        "elapsed": 13.331894874572754,
+        "final_avg_size": 6.75,
+        "final_avg_hidden": 0.3
+      },
+      {
+        "history": [
+          {
+            "gen": 0,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 6.2,
+            "avg_hidden": 0.1
+          },
+          {
+            "gen": 1,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 6.85,
+            "avg_hidden": 0.2
+          },
+          {
+            "gen": 2,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 6.9,
+            "avg_hidden": 0.2
+          },
+          {
+            "gen": 3,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 7.2,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 4,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 6.95,
+            "avg_hidden": 0.3
+          },
+          {
+            "gen": 5,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 7.7,
+            "avg_hidden": 0.5
+          },
+          {
+            "gen": 6,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 7.7,
+            "avg_hidden": 0.45
+          },
+          {
+            "gen": 7,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 9.05,
+            "avg_hidden": 0.7
+          },
+          {
+            "gen": 8,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 9.4,
+            "avg_hidden": 0.8
+          },
+          {
+            "gen": 9,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 10.45,
+            "avg_hidden": 0.95
+          },
+          {
+            "gen": 10,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 10.8,
+            "avg_hidden": 1.0
+          },
+          {
+            "gen": 11,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 10.35,
+            "avg_hidden": 0.95
+          },
+          {
+            "gen": 12,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 10.95,
+            "avg_hidden": 1.05
+          },
+          {
+            "gen": 13,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 11.55,
+            "avg_hidden": 1.2
+          },
+          {
+            "gen": 14,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 13.7,
+            "avg_hidden": 1.5
+          },
+          {
+            "gen": 15,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 14.05,
+            "avg_hidden": 1.55
+          },
+          {
+            "gen": 16,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 15.5,
+            "avg_hidden": 1.85
+          },
+          {
+            "gen": 17,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 15.5,
+            "avg_hidden": 1.75
+          },
+          {
+            "gen": 18,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 17.35,
+            "avg_hidden": 2.05
+          },
+          {
+            "gen": 19,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 17.85,
+            "avg_hidden": 2.15
+          }
+        ],
+        "best_fitness": -200.0,
+        "elapsed": 16.3084774017334,
+        "final_avg_size": 17.85,
+        "final_avg_hidden": 2.15
+      },
+      {
+        "history": [
+          {
+            "gen": 0,
+            "best": -167.0,
+            "mean": -198.35,
+            "std": 7.192183256842112,
+            "avg_size": 6.2,
+            "avg_hidden": 0.1
+          },
+          {
+            "gen": 1,
+            "best": -200.0,
+            "mean": -200.0,
+            "std": 0.0,
+            "avg_size": 6.9,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 2,
+            "best": -166.0,
+            "mean": -198.3,
+            "std": 7.410128204019144,
+            "avg_size": 7.1,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 3,
+            "best": -165.0,
+            "mean": -198.2,
+            "std": 7.619711280619495,
+            "avg_size": 6.85,
+            "avg_hidden": 0.2
+          },
+          {
+            "gen": 4,
+            "best": -199.0,
+            "mean": -199.95,
+            "std": 0.2179449471770337,
+            "avg_size": 6.6,
+            "avg_hidden": 0.15
+          },
+          {
+            "gen": 5,
+            "best": -174.0,
+            "mean": -198.65,
+            "std": 5.6592844070606665,
+            "avg_size": 7.95,
+            "avg_hidden": 0.45
+          },
+          {
+            "gen": 6,
+            "best": -169.0,
+            "mean": -198.4,
+            "std": 6.748333127521195,
+            "avg_size": 7.7,
+            "avg_hidden": 0.4
+          },
+          {
+            "gen": 7,
+            "best": -171.0,
+            "mean": -198.35,
+            "std": 6.310903263400573,
+            "avg_size": 7.4,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 8,
+            "best": -116.0,
+            "mean": -194.25,
+            "std": 18.886172190256023,
+            "avg_size": 7.4,
+            "avg_hidden": 0.4
+          },
+          {
+            "gen": 9,
+            "best": -116.0,
+            "mean": -194.15,
+            "std": 18.929540406465236,
+            "avg_size": 7.25,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 10,
+            "best": -116.0,
+            "mean": -190.3,
+            "std": 24.8114892741246,
+            "avg_size": 6.6,
+            "avg_hidden": 0.2
+          },
+          {
+            "gen": 11,
+            "best": -116.0,
+            "mean": -184.4,
+            "std": 29.54555804177677,
+            "avg_size": 6.4,
+            "avg_hidden": 0.2
+          },
+          {
+            "gen": 12,
+            "best": -116.0,
+            "mean": -185.85,
+            "std": 29.695580479256503,
+            "avg_size": 6.65,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 13,
+            "best": -117.0,
+            "mean": -190.1,
+            "std": 25.053742235442595,
+            "avg_size": 6.95,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 14,
+            "best": -117.0,
+            "mean": -185.95,
+            "std": 29.5389150105416,
+            "avg_size": 7.45,
+            "avg_hidden": 0.5
+          },
+          {
+            "gen": 15,
+            "best": -117.0,
+            "mean": -186.0,
+            "std": 29.347913043349436,
+            "avg_size": 7.55,
+            "avg_hidden": 0.55
+          },
+          {
+            "gen": 16,
+            "best": -116.0,
+            "mean": -190.0,
+            "std": 25.25074256333861,
+            "avg_size": 7.45,
+            "avg_hidden": 0.5
+          },
+          {
+            "gen": 17,
+            "best": -117.0,
+            "mean": -190.0,
+            "std": 25.08585258666725,
+            "avg_size": 7.75,
+            "avg_hidden": 0.55
+          },
+          {
+            "gen": 18,
+            "best": -117.0,
+            "mean": -178.05,
+            "std": 34.63448426063248,
+            "avg_size": 6.6,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 19,
+            "best": -117.0,
+            "mean": -179.95,
+            "std": 34.73539261329861,
+            "avg_size": 7.3,
+            "avg_hidden": 0.45
+          }
+        ],
+        "best_fitness": -116.0,
+        "elapsed": 13.763033151626587,
+        "final_avg_size": 7.3,
+        "final_avg_hidden": 0.45
+      }
+    ],
+    "Acrobot-v1": [
+      {
+        "history": [
+          {
+            "gen": 0,
+            "best": -78.0,
+            "mean": -369.45,
+            "std": 178.88948403972773,
+            "avg_size": 18.5,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 1,
+            "best": -65.0,
+            "mean": -252.3,
+            "std": 184.3331494875515,
+            "avg_size": 21.85,
+            "avg_hidden": 0.75
+          },
+          {
+            "gen": 2,
+            "best": -65.0,
+            "mean": -204.95,
+            "std": 173.6172442472233,
+            "avg_size": 26.8,
+            "avg_hidden": 1.1
+          },
+          {
+            "gen": 3,
+            "best": -64.0,
+            "mean": -188.15,
+            "std": 181.10446570971135,
+            "avg_size": 30.7,
+            "avg_hidden": 1.45
+          },
+          {
+            "gen": 4,
+            "best": -64.0,
+            "mean": -86.05,
+            "std": 28.59278755210831,
+            "avg_size": 32.7,
+            "avg_hidden": 1.65
+          },
+          {
+            "gen": 5,
+            "best": -64.0,
+            "mean": -125.25,
+            "std": 127.00782456211113,
+            "avg_size": 33.25,
+            "avg_hidden": 1.8
+          },
+          {
+            "gen": 6,
+            "best": -64.0,
+            "mean": -151.6,
+            "std": 148.08997265176328,
+            "avg_size": 31.8,
+            "avg_hidden": 1.55
+          },
+          {
+            "gen": 7,
+            "best": -64.0,
+            "mean": -105.05,
+            "std": 55.95755087564143,
+            "avg_size": 36.45,
+            "avg_hidden": 2.15
+          },
+          {
+            "gen": 8,
+            "best": -64.0,
+            "mean": -127.4,
+            "std": 131.25905683037647,
+            "avg_size": 35.55,
+            "avg_hidden": 1.95
+          },
+          {
+            "gen": 9,
+            "best": -63.0,
+            "mean": -104.4,
+            "std": 95.25355636405394,
+            "avg_size": 33.55,
+            "avg_hidden": 1.8
+          },
+          {
+            "gen": 10,
+            "best": -63.0,
+            "mean": -101.05,
+            "std": 95.08600054687335,
+            "avg_size": 32.65,
+            "avg_hidden": 1.6
+          },
+          {
+            "gen": 11,
+            "best": -63.0,
+            "mean": -78.7,
+            "std": 16.315943123215405,
+            "avg_size": 35.4,
+            "avg_hidden": 2.0
+          },
+          {
+            "gen": 12,
+            "best": -63.0,
+            "mean": -74.05,
+            "std": 10.302790884027493,
+            "avg_size": 35.6,
+            "avg_hidden": 1.95
+          },
+          {
+            "gen": 13,
+            "best": -63.0,
+            "mean": -80.45,
+            "std": 29.494872435730247,
+            "avg_size": 35.55,
+            "avg_hidden": 1.9
+          },
+          {
+            "gen": 14,
+            "best": -63.0,
+            "mean": -75.75,
+            "std": 11.763821657947727,
+            "avg_size": 35.7,
+            "avg_hidden": 1.95
+          },
+          {
+            "gen": 15,
+            "best": -63.0,
+            "mean": -75.8,
+            "std": 14.507239572020584,
+            "avg_size": 37.1,
+            "avg_hidden": 2.05
+          },
+          {
+            "gen": 16,
+            "best": -63.0,
+            "mean": -92.15,
+            "std": 94.11815712177965,
+            "avg_size": 37.2,
+            "avg_hidden": 2.1
+          },
+          {
+            "gen": 17,
+            "best": -62.0,
+            "mean": -85.7,
+            "std": 57.68283973592146,
+            "avg_size": 38.5,
+            "avg_hidden": 2.3
+          },
+          {
+            "gen": 18,
+            "best": -62.0,
+            "mean": -82.15,
+            "std": 19.865233449421126,
+            "avg_size": 38.5,
+            "avg_hidden": 2.35
+          },
+          {
+            "gen": 19,
+            "best": -62.0,
+            "mean": -140.2,
+            "std": 152.38261055645424,
+            "avg_size": 38.65,
+            "avg_hidden": 2.2
+          }
+        ],
+        "best_fitness": -62.0,
+        "elapsed": 30.36126708984375,
+        "final_avg_size": 38.65,
+        "final_avg_hidden": 2.2
+      },
+      {
+        "history": [
+          {
+            "gen": 0,
+            "best": -139.0,
+            "mean": -481.95,
+            "std": 78.67812593090916,
+            "avg_size": 18.3,
+            "avg_hidden": 0.15
+          },
+          {
+            "gen": 1,
+            "best": -139.0,
+            "mean": -464.15,
+            "std": 107.55290558604172,
+            "avg_size": 19.3,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 2,
+            "best": -105.0,
+            "mean": -425.85,
+            "std": 140.87415483331213,
+            "avg_size": 20.85,
+            "avg_hidden": 0.5
+          },
+          {
+            "gen": 3,
+            "best": -71.0,
+            "mean": -342.55,
+            "std": 178.95655198958207,
+            "avg_size": 23.15,
+            "avg_hidden": 0.8
+          },
+          {
+            "gen": 4,
+            "best": -82.0,
+            "mean": -309.6,
+            "std": 190.33953871962598,
+            "avg_size": 26.55,
+            "avg_hidden": 1.0
+          },
+          {
+            "gen": 5,
+            "best": -81.0,
+            "mean": -177.95,
+            "std": 140.8458288342257,
+            "avg_size": 24.55,
+            "avg_hidden": 0.85
+          },
+          {
+            "gen": 6,
+            "best": -65.0,
+            "mean": -168.1,
+            "std": 141.62446822495045,
+            "avg_size": 27.05,
+            "avg_hidden": 1.2
+          },
+          {
+            "gen": 7,
+            "best": -65.0,
+            "mean": -241.65,
+            "std": 190.56029885576905,
+            "avg_size": 26.75,
+            "avg_hidden": 1.05
+          },
+          {
+            "gen": 8,
+            "best": -74.0,
+            "mean": -216.35,
+            "std": 186.26144931251875,
+            "avg_size": 28.05,
+            "avg_hidden": 1.25
+          },
+          {
+            "gen": 9,
+            "best": -66.0,
+            "mean": -215.25,
+            "std": 187.89195698592314,
+            "avg_size": 25.1,
+            "avg_hidden": 0.9
+          },
+          {
+            "gen": 10,
+            "best": -65.0,
+            "mean": -86.65,
+            "std": 18.072838736623527,
+            "avg_size": 23.0,
+            "avg_hidden": 0.8
+          },
+          {
+            "gen": 11,
+            "best": -65.0,
+            "mean": -107.6,
+            "std": 90.89796477369556,
+            "avg_size": 24.8,
+            "avg_hidden": 1.0
+          },
+          {
+            "gen": 12,
+            "best": -64.0,
+            "mean": -206.8,
+            "std": 192.37427062889674,
+            "avg_size": 24.65,
+            "avg_hidden": 0.8
+          },
+          {
+            "gen": 13,
+            "best": -64.0,
+            "mean": -127.0,
+            "std": 125.58463281787306,
+            "avg_size": 26.35,
+            "avg_hidden": 0.95
+          },
+          {
+            "gen": 14,
+            "best": -64.0,
+            "mean": -102.0,
+            "std": 91.9788019056565,
+            "avg_size": 20.4,
+            "avg_hidden": 0.45
+          },
+          {
+            "gen": 15,
+            "best": -64.0,
+            "mean": -126.1,
+            "std": 125.33152037695864,
+            "avg_size": 19.95,
+            "avg_hidden": 0.35
+          },
+          {
+            "gen": 16,
+            "best": -64.0,
+            "mean": -84.5,
+            "std": 24.340295807569802,
+            "avg_size": 18.65,
+            "avg_hidden": 0.1
+          },
+          {
+            "gen": 17,
+            "best": -64.0,
+            "mean": -77.0,
+            "std": 15.639693091617879,
+            "avg_size": 18.45,
+            "avg_hidden": 0.1
+          },
+          {
+            "gen": 18,
+            "best": -64.0,
+            "mean": -82.45,
+            "std": 15.882301470504832,
+            "avg_size": 19.75,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 19,
+            "best": -64.0,
+            "mean": -87.35,
+            "std": 25.50740088680146,
+            "avg_size": 20.3,
+            "avg_hidden": 0.35
+          }
+        ],
+        "best_fitness": -64.0,
+        "elapsed": 53.79238939285278,
+        "final_avg_size": 20.3,
+        "final_avg_hidden": 0.35
+      },
+      {
+        "history": [
+          {
+            "gen": 0,
+            "best": -122.0,
+            "mean": -436.45,
+            "std": 129.117959633817,
+            "avg_size": 18.2,
+            "avg_hidden": 0.1
+          },
+          {
+            "gen": 1,
+            "best": -122.0,
+            "mean": -372.1,
+            "std": 159.53178366707994,
+            "avg_size": 18.95,
+            "avg_hidden": 0.2
+          },
+          {
+            "gen": 2,
+            "best": -76.0,
+            "mean": -225.85,
+            "std": 160.86959781139507,
+            "avg_size": 18.1,
+            "avg_hidden": 0.05
+          },
+          {
+            "gen": 3,
+            "best": -76.0,
+            "mean": -151.5,
+            "std": 119.14549928553743,
+            "avg_size": 18.5,
+            "avg_hidden": 0.15
+          },
+          {
+            "gen": 4,
+            "best": -73.0,
+            "mean": -161.4,
+            "std": 144.05325404169113,
+            "avg_size": 19.0,
+            "avg_hidden": 0.15
+          },
+          {
+            "gen": 5,
+            "best": -73.0,
+            "mean": -130.95,
+            "std": 123.95905574019187,
+            "avg_size": 18.9,
+            "avg_hidden": 0.2
+          },
+          {
+            "gen": 6,
+            "best": -73.0,
+            "mean": -148.15,
+            "std": 148.80499823594639,
+            "avg_size": 19.1,
+            "avg_hidden": 0.3
+          },
+          {
+            "gen": 7,
+            "best": -72.0,
+            "mean": -191.1,
+            "std": 179.44968654193855,
+            "avg_size": 19.0,
+            "avg_hidden": 0.15
+          },
+          {
+            "gen": 8,
+            "best": -65.0,
+            "mean": -112.65,
+            "std": 94.23124481826609,
+            "avg_size": 18.2,
+            "avg_hidden": 0.1
+          },
+          {
+            "gen": 9,
+            "best": -65.0,
+            "mean": -83.3,
+            "std": 20.77041164734103,
+            "avg_size": 20.3,
+            "avg_hidden": 0.3
+          },
+          {
+            "gen": 10,
+            "best": -64.0,
+            "mean": -95.4,
+            "std": 93.51812658517065,
+            "avg_size": 22.15,
+            "avg_hidden": 0.6
+          },
+          {
+            "gen": 11,
+            "best": -64.0,
+            "mean": -120.25,
+            "std": 127.08260109078661,
+            "avg_size": 21.15,
+            "avg_hidden": 0.45
+          },
+          {
+            "gen": 12,
+            "best": -64.0,
+            "mean": -113.6,
+            "std": 128.98542553327488,
+            "avg_size": 20.45,
+            "avg_hidden": 0.4
+          },
+          {
+            "gen": 13,
+            "best": -64.0,
+            "mean": -94.15,
+            "std": 93.78234108828805,
+            "avg_size": 20.65,
+            "avg_hidden": 0.4
+          },
+          {
+            "gen": 14,
+            "best": -64.0,
+            "mean": -74.8,
+            "std": 10.609429767899874,
+            "avg_size": 19.95,
+            "avg_hidden": 0.4
+          },
+          {
+            "gen": 15,
+            "best": -64.0,
+            "mean": -115.6,
+            "std": 128.47894769183003,
+            "avg_size": 19.4,
+            "avg_hidden": 0.25
+          },
+          {
+            "gen": 16,
+            "best": -64.0,
+            "mean": -76.45,
+            "std": 10.293080199823569,
+            "avg_size": 18.65,
+            "avg_hidden": 0.1
+          },
+          {
+            "gen": 17,
+            "best": -64.0,
+            "mean": -92.1,
+            "std": 94.08714046032007,
+            "avg_size": 18.4,
+            "avg_hidden": 0.2
+          },
+          {
+            "gen": 18,
+            "best": -64.0,
+            "mean": -76.1,
+            "std": 14.522052196573322,
+            "avg_size": 19.55,
+            "avg_hidden": 0.3
+          },
+          {
+            "gen": 19,
+            "best": -64.0,
+            "mean": -180.45,
+            "std": 184.83437856632625,
+            "avg_size": 19.0,
+            "avg_hidden": 0.25
+          }
+        ],
+        "best_fitness": -64.0,
+        "elapsed": 50.47761797904968,
+        "final_avg_size": 19.0,
+        "final_avg_hidden": 0.25
+      }
+    ]
+  }
+}
