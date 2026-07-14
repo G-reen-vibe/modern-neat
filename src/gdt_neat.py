@@ -195,6 +195,59 @@ class GDTNetwork(nn.Module):
         return self.forward(obs)
 
     # ------------------------------------------------------------------
+    # Numpy forward pass (fast inference, no autograd)
+    # ------------------------------------------------------------------
+
+    def _build_numpy_cache(self) -> None:
+        """Cache network parameters as numpy arrays for fast inference."""
+        order = self._ensure_topo()
+        self._np_order = order
+        type_map = {"input": 0, "hidden": 1, "output": 2}
+        self._np_types = np.array([type_map[self.node_types[n]] for n in order], dtype=np.int32)
+        self._np_biases = np.array(
+            [float(self.node_bias[n].item()) for n in order], dtype=np.float64
+        )
+        self._np_acts = [self.node_act[n] for n in order]
+        self._np_id2idx = {n: i for i, n in enumerate(order)}
+        self._np_input_idx = [self._np_id2idx[n] for n in self.input_ids]
+        self._np_output_idx = [self._np_id2idx[n] for n in self.output_ids]
+        # build adjacency: for each node, list of (in_idx, weight)
+        in_edges: Dict[int, List[Tuple[int, float]]] = {i: [] for i in range(len(order))}
+        for (i, j), w in self.edges.items():
+            if i in self._np_id2idx and j in self._np_id2idx:
+                in_edges[self._np_id2idx[j]].append((self._np_id2idx[i], float(w.item())))
+        self._np_in_edges = in_edges
+        self._np_cache_dirty = False
+
+    def forward_numpy(self, obs: np.ndarray) -> np.ndarray:
+        """Fast numpy forward pass for inference (no autograd)."""
+        if not hasattr(self, '_np_cache_dirty') or self._np_cache_dirty or not hasattr(self, '_np_order'):
+            self._build_numpy_cache()
+        a = np.zeros(len(self._np_order), dtype=np.float64)
+        for i, idx in enumerate(self._np_input_idx):
+            a[idx] = float(obs[i])
+        for idx in self._np_order:
+            if self._np_types[idx] == 0:  # input
+                continue
+            s = self._np_biases[idx]
+            for in_idx, w in self._np_in_edges[idx]:
+                s += a[in_idx] * w
+            a[idx] = _activate_np(s, self._np_acts[idx])
+        return np.array([a[idx] for idx in self._np_output_idx], dtype=np.float64)
+
+    def action_numpy(self, obs: np.ndarray, stochastic: bool = True, rng: Optional[np.random.RandomState] = None) -> int:
+        """Fast numpy-based action selection."""
+        logits = self.forward_numpy(obs)
+        # softmax
+        e = np.exp(logits - np.max(logits))
+        probs = e / e.sum()
+        if stochastic:
+            if rng is not None:
+                return int(rng.choice(len(probs), p=probs))
+            return int(np.random.choice(len(probs), p=probs))
+        return int(np.argmax(probs))
+
+    # ------------------------------------------------------------------
     # Topology gradient computation
     # ------------------------------------------------------------------
 
@@ -256,6 +309,19 @@ def _activate(x: torch.Tensor, kind: str) -> torch.Tensor:
         return torch.sigmoid(x)
     if kind == "identity":
         return x
+    raise ValueError(kind)
+
+
+def _activate_np(x: float, kind: str) -> float:
+    """Numpy version of _activate for fast inference."""
+    if kind == "tanh":
+        return float(np.tanh(x))
+    if kind == "relu":
+        return float(x) if x > 0.0 else 0.0
+    if kind == "sigmoid":
+        return float(1.0 / (1.0 + np.exp(-x)))
+    if kind == "identity":
+        return float(x)
     raise ValueError(kind)
 
 
@@ -371,27 +437,21 @@ class GDTNEAT:
     def _rollout(self, net: GDTNetwork, env, max_steps: int, stochastic: bool = True) -> Tuple[
         List[np.ndarray], List[int], List[float], float, np.ndarray
     ]:
-        """Collect one rollout. Returns (obs_list, act_list, rew_list, total_reward, behavior_descriptor).
+        """Collect one rollout using the FAST numpy forward pass.
 
         If novelty_bonus > 0, the reward at each step is augmented with a
         novelty bonus: the distance from the current state to its k-nearest
-        neighbors in the novelty archive. This provides a dense learning
-        signal even on sparse-reward tasks like MountainCar.
-
-        If stochastic=True, actions are SAMPLED from the softmax policy
-        (needed for policy-gradient training to be on-policy). If
-        stochastic=False, actions are argmax (used for clean fitness
-        evaluation). The novelty bonus is only added to the stochastic
-        rollouts (training); the deterministic rollouts use pure env reward
-        for fitness evaluation.
+        neighbors in the novelty archive.
         """
         obs, _ = env.reset()
         obs_list, act_list, rew_list = [], [], []
+        # build numpy cache once at the start of the rollout
+        net._build_numpy_cache()
         for _ in range(max_steps):
-            obs_t = torch.from_numpy(np.asarray(obs, dtype=np.float32))
-            with torch.no_grad():
-                logits = net.action_logits(obs_t)
-                probs = F.softmax(logits, dim=-1).numpy().flatten()
+            # fast numpy forward pass
+            logits = net.forward_numpy(obs)
+            e = np.exp(logits - np.max(logits))
+            probs = e / e.sum()
             if stochastic:
                 a = int(np.random.choice(len(probs), p=probs))
             else:
@@ -400,7 +460,6 @@ class GDTNEAT:
             act_list.append(a)
             obs, r, term, trunc, _ = env.step(a)
             r = float(r)
-            # novelty bonus (only for stochastic / training rollouts)
             if stochastic and self.cfg.novelty_bonus > 0:
                 nov = self._novelty_of_state(obs)
                 r = r + self.cfg.novelty_bonus * nov
@@ -408,7 +467,6 @@ class GDTNEAT:
             if term or trunc:
                 break
         total = float(sum(rew_list))
-        # update novelty archive with visited states (only for stochastic rollouts)
         if stochastic and self.cfg.novelty_bonus > 0 and obs_list:
             self._update_novelty_archive(obs_list)
         if obs_list:
