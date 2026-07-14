@@ -15,7 +15,7 @@ from typing import Dict, List, Tuple, Optional, Callable
 from dataclasses import dataclass, field
 
 from atlas_neat.genome import Genome, create_random_genome
-from atlas_neat.archive import AdaptiveArchive
+from atlas_neat.density_archive import DensityArchive
 
 
 @dataclass
@@ -25,9 +25,9 @@ class AtlasConfig:
     pop_size: int = 150
     
     # Archive
-    archive_dims: int = 3
-    archive_resolution: int = 4
-    archive_max_resolution: int = 16
+    archive_dims: int = 5
+    archive_resolution: int = 2
+    archive_max_resolution: int = 8
     archive_adapt_interval: int = 10
     
     # Mutation rates
@@ -78,12 +78,11 @@ class AtlasNEAT:
         self.num_inputs = num_inputs
         self.num_outputs = num_outputs
         
-        # Archive for quality-diversity
-        self.archive = AdaptiveArchive(
-            n_dimensions=config.archive_dims,
-            initial_resolution=config.archive_resolution,
-            max_resolution=config.archive_max_resolution,
-            adapt_interval=config.archive_adapt_interval
+        # Density-based archive for quality-diversity
+        self.archive = DensityArchive(
+            eps=0.25,
+            min_samples=2,
+            decay_rate=0.95
         )
         
         # Population
@@ -152,19 +151,41 @@ class AtlasNEAT:
         
         return config
     
+    def select_parent(self) -> Genome:
+        """
+        Select a parent using hybrid strategy.
+        When archive is sparse, use population-level tournament selection.
+        When archive is well-populated, use archive-based selection.
+        """
+        coverage = self.archive.get_coverage()
+        
+        if coverage < 0.25 or len(self.archive) < 3:
+            # Archive too sparse - use population tournament selection
+            candidates = list(self.population.values())
+            if len(candidates) < self.config.tournament_size:
+                return random.choice(candidates)
+            
+            contestants = random.sample(candidates, self.config.tournament_size)
+            return max(contestants, key=lambda g: g.fitness or -9999)
+        else:
+            # Archive well-populated - use archive selection
+            parent = self.archive.sample_parent(
+                self.config.selection_method,
+                self.config.tournament_size
+            )
+            if parent is not None:
+                return parent
+            
+            # Fallback
+            candidates = list(self.population.values())
+            return random.choice(candidates)
+    
     def create_offspring(self) -> Genome:
         """Create a single offspring through selection and mutation."""
         # Decide: mutation-only or crossover
         if random.random() < 0.75 or len(self.archive) < 2:
             # Asexual reproduction with mutation
-            parent = self.archive.sample_parent(
-                self.config.selection_method,
-                self.config.tournament_size
-            )
-            
-            if parent is None:
-                # Fallback: random from population
-                parent = random.choice(list(self.population.values()))
+            parent = self.select_parent()
             
             child = copy.deepcopy(parent)
             child.key = self.next_genome_key
@@ -183,19 +204,8 @@ class AtlasNEAT:
                 child.mutate(self.get_mutation_config())
         else:
             # Crossover
-            parent1 = self.archive.sample_parent(
-                self.config.selection_method,
-                self.config.tournament_size
-            )
-            parent2 = self.archive.sample_parent(
-                self.config.selection_method,
-                self.config.tournament_size
-            )
-            
-            if parent1 is None:
-                parent1 = random.choice(list(self.population.values()))
-            if parent2 is None:
-                parent2 = random.choice(list(self.population.values()))
+            parent1 = self.select_parent()
+            parent2 = self.select_parent()
             
             child = parent1.crossover(parent2)
             child.key = self.next_genome_key
@@ -237,8 +247,8 @@ class AtlasNEAT:
         # Update archive
         self.update_archive()
         
-        # Adapt archive resolution
-        self.archive.adapt_resolution()
+        # Update density clusters
+        self.archive.update()
         
         # Create next generation
         self.create_next_generation()
@@ -266,7 +276,7 @@ class AtlasNEAT:
             'coverage': diversity['coverage'],
             'qd_score': diversity['qd_score'],
             'n_occupied': diversity['n_occupied'],
-            'resolution': self.archive.resolution,
+            'n_clusters': self.archive.get_n_clusters(),
             'time': gen_time,
         }
     
@@ -289,8 +299,7 @@ class AtlasNEAT:
         
         print(f"Atlas-NEAT: Starting evolution")
         print(f"  Population: {self.config.pop_size}")
-        print(f"  Archive: {self.archive.resolution}^{self.config.archive_dims} = "
-              f"{self.archive.resolution ** self.config.archive_dims} cells")
+        print(f"  Archive: Density-based (eps={self.archive.eps})")
         
         for gen in range(generations):
             stats = self.run_generation(eval_func)
@@ -298,7 +307,7 @@ class AtlasNEAT:
             print(f"Gen {stats['generation']}: Best={stats['best_fitness']:.2f}, "
                   f"Avg={stats['avg_fitness']:.2f}, Coverage={stats['coverage']:.2%}, "
                   f"QD={stats['qd_score']:.1f}, Cells={stats['n_occupied']}, "
-                  f"Res={stats['resolution']}, Time={stats['time']:.2f}s")
+                  f"Clusters={stats['n_clusters']}, Time={stats['time']:.2f}s")
             
             if callback:
                 callback(stats)

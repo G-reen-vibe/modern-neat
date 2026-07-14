@@ -56,11 +56,11 @@ def create_evaluator(env_name: str, episodes: int = 3, max_steps: int = 500,
     def evaluate(genome: Genome) -> float:
         """Evaluate a genome on the environment."""
         network = genome.create_network()
-        env = gym.make(env_name)
         
         total_reward = 0.0
         for ep in range(episodes):
             ep_seed = seed + eval_counter[0] * episodes + ep
+            env = gym.make(env_name)
             obs, info = env.reset(seed=ep_seed)
             episode_reward = 0.0
             
@@ -80,8 +80,8 @@ def create_evaluator(env_name: str, episodes: int = 3, max_steps: int = 500,
                     break
             
             total_reward += episode_reward
+            env.close()
         
-        env.close()
         eval_counter[0] += 1
         fitness = total_reward / episodes
         genome.fitness = fitness

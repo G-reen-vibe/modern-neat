@@ -345,35 +345,78 @@ class Genome:
         
         return child
     
-    def get_characterization(self) -> Tuple[float, float, float]:
+    def get_characterization(self) -> Tuple[float, float, float, float, float]:
         """
-        Get the 3D behavioral-topological characterization.
-        Returns (complexity, connectivity, activation_diversity)
+        Get the 5D behavioral-topological characterization.
+        Returns (depth, hidden_ratio, conn_ratio, activation_diversity, weight_sparsity)
+        Each dimension is normalized to [0, 1].
         """
-        n_nodes = len([n for n in self.nodes.values() if n.node_type != 'input'])
-        n_total = len(self.nodes)
+        input_ids = set(n.id for n in self.nodes.values() if n.node_type == 'input')
+        output_ids = set(n.id for n in self.nodes.values() if n.node_type == 'output')
+        hidden_nodes = [n for n in self.nodes.values() if n.node_type == 'hidden']
         n_enabled = sum(1 for c in self.connections.values() if c.enabled)
-        n_possible = n_total * (n_total - 1) / 2 if n_total > 1 else 1
         
-        # Dimension 1: Complexity (normalized node count)
-        max_nodes = 100  # Reasonable upper bound
-        complexity = min(n_nodes / max_nodes, 1.0)
+        # Dimension 1: Network depth (longest path from any input to any output)
+        depth = self._compute_depth(input_ids, output_ids)
+        max_depth = 20  # Upper bound
+        depth_norm = min(depth / max_depth, 1.0)
         
-        # Dimension 2: Connectivity density
-        connectivity = min(n_enabled / max(n_possible, 1), 1.0)
+        # Dimension 2: Hidden node ratio
+        max_hidden = 50
+        hidden_ratio = min(len(hidden_nodes) / max_hidden, 1.0)
         
-        # Dimension 3: Activation diversity (entropy of activation types)
+        # Dimension 3: Connection ratio (enabled / possible excluding self-loops)
+        n_nodes = len(self.nodes)
+        max_possible = n_nodes * (n_nodes - 1) if n_nodes > 1 else 1
+        conn_ratio = min(n_enabled / max_possible, 1.0) if max_possible > 0 else 0
+        
+        # Dimension 4: Activation diversity (normalized entropy)
         activations = [n.activation for n in self.nodes.values() if n.node_type != 'input']
         if not activations:
-            diversity = 0.0
+            act_diversity = 0.0
         else:
             counts = {}
             for a in activations:
                 counts[a] = counts.get(a, 0) + 1
             probs = [c / len(activations) for c in counts.values()]
-            diversity = -sum(p * np.log(p + 1e-10) for p in probs) / np.log(len(NodeGene.AVAILABLE_ACTIVATIONS))
+            entropy = -sum(p * np.log(p + 1e-10) for p in probs)
+            act_diversity = min(entropy / np.log(len(NodeGene.AVAILABLE_ACTIVATIONS)), 1.0)
         
-        return (complexity, connectivity, diversity)
+        # Dimension 5: Weight sparsity (fraction of |weight| < 0.1)
+        enabled_weights = [abs(c.weight) for c in self.connections.values() if c.enabled]
+        if enabled_weights:
+            sparsity = sum(1 for w in enabled_weights if w < 0.1) / len(enabled_weights)
+        else:
+            sparsity = 0.0
+        
+        return (depth_norm, hidden_ratio, conn_ratio, act_diversity, sparsity)
+    
+    def _compute_depth(self, input_ids: set, output_ids: set) -> int:
+        """Compute longest path from any input to any output."""
+        if not input_ids or not output_ids:
+            return 0
+        
+        # Build adjacency list of enabled connections
+        adj = {nid: [] for nid in self.nodes}
+        for conn in self.connections.values():
+            if conn.enabled:
+                adj[conn.in_node].append(conn.out_node)
+        
+        # BFS from each input to find max depth to any output
+        max_depth = 0
+        for start in input_ids:
+            visited = {start: 0}
+            queue = [start]
+            while queue:
+                node = queue.pop(0)
+                for neighbor in adj[node]:
+                    if neighbor not in visited:
+                        visited[neighbor] = visited[node] + 1
+                        queue.append(neighbor)
+                        if neighbor in output_ids:
+                            max_depth = max(max_depth, visited[neighbor])
+        
+        return max_depth
     
     def get_complexity_score(self) -> int:
         """Get total network complexity (nodes + enabled connections)."""
