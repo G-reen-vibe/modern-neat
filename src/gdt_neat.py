@@ -346,6 +346,11 @@ class GDTNEAT:
         # novelty archive: stores state-visitation descriptors (squared obs vectors)
         self._novelty_archive: Optional[np.ndarray] = None  # shape (n, obs_dim)
         self._novelty_archive_n = 0
+        # shared edge-quality map: (in_node, out_node) -> EMA gradient signal
+        # individuals contribute to this and use it as a prior when selecting
+        # edges to add. This enables co-evolutionary topology growth.
+        self._edge_quality_map: Dict[Tuple[int, int], float] = {}
+        self._edge_quality_ema: float = 0.9  # EMA decay
         # reusable env instance (avoid create/destroy overhead)
         self._env = gym.make(env_name)
         self._env.reset(seed=cfg.seed)
@@ -604,11 +609,17 @@ class GDTNEAT:
                 all_grads[key] = float(p.grad.item())
             else:
                 all_grads[key] = 0.0
-        # rank candidates by abs(grad)
+        # rank candidates by abs(grad) + shared edge-quality prior
+        # the prior helps individuals benefit from each other's topology exploration
         ranked_candidates = sorted(
-            [(k, all_grads[k]) for k in added_keys],
+            [(k, all_grads[k] + 0.5 * self._edge_quality_map.get(k, 0.0)) for k in added_keys],
             key=lambda kv: abs(kv[1]), reverse=True
         )
+        # update shared edge-quality map with current gradients
+        for k in added_keys:
+            old = self._edge_quality_map.get(k, 0.0)
+            new = all_grads[k]
+            self._edge_quality_map[k] = self._edge_quality_ema * old + (1 - self._edge_quality_ema) * new
         # remove all candidate edges
         for key in added_keys:
             del net.edges[key]
@@ -635,23 +646,39 @@ class GDTNEAT:
         existing_grads = {k: abs(v) for k, v in all_grads.items() if k not in added_keys}
         return existing_grads
 
-    def _maybe_split_edge(self, ind: Individual) -> None:
-        """With some probability, split the largest-weight edge to add a hidden node."""
-        if np.random.random() > self.cfg.p_split_edge:
-            return
+    def _maybe_split_edge(self, ind: Individual, edge_grads: Dict[Tuple[int, int], float]) -> None:
+        """Split an edge to add a hidden node.
+
+        Strategy: split the edge with the largest gradient signal (not the
+        largest weight). A large gradient on an edge means that edge is
+        being "asked to do a lot of work" — splitting it and adding a
+        non-linearity can help the network represent more complex functions.
+
+        This is consistent with the core principle: gradient directs ALL
+        structural decisions, including node creation.
+        """
         net = ind.network
         if not net.edges:
             return
-        # pick the edge with largest |weight|
-        items = list(net.edges.items())
-        (i, j), w = max(items, key=lambda kv: abs(float(kv[1].item())))
-        old_w = float(w.item())
-        # disable old edge (we keep it but set weight to 0; we can't really delete params)
+        # find the edge with the largest gradient signal
+        if edge_grads:
+            # use gradient magnitude to pick the edge to split
+            best_key = max(edge_grads.keys(), key=lambda k: edge_grads[k])
+            i, j = best_key
+            old_w = float(net.edges[best_key].item())
+        else:
+            # fall back to largest weight
+            items = list(net.edges.items())
+            (i, j), w = max(items, key=lambda kv: abs(float(kv[1].item())))
+            old_w = float(w.item())
+        # only split if the edge has non-trivial weight
+        if abs(old_w) < 0.05:
+            return
+        # set old edge weight to 0
         with torch.no_grad():
-            w.fill_(0.0)
+            net.edges[(i, j)].fill_(0.0)
         # add hidden node
         h = net.add_node("hidden")
-        # add edges i -> h (weight 1) and h -> j (weight = old_w) so the function is initially preserved
         net.add_edge(i, h, 1.0)
         net.add_edge(h, j, old_w)
 
@@ -730,7 +757,13 @@ class GDTNEAT:
         return int(best)
 
     def _reproduce(self) -> None:
-        """Produce next generation via selection + structural inheritance."""
+        """Produce next generation via selection + gradient-directed mutation.
+
+        Instead of adding Gaussian noise to cloned weights (traditional NEAT
+        mutation), we apply a small policy gradient step to each clone. This
+        unifies mutation under the gradient principle: reproduction IS just
+        another gradient step, with a slightly different rollout.
+        """
         cfg = self.cfg
         # sort by fitness
         order = sorted(range(len(self.population)),
@@ -740,20 +773,24 @@ class GDTNEAT:
         new_pop: List[Individual] = []
         for i in range(n_elite):
             parent = self.population[order[i]]
-            # elite: keep as-is (increment age)
             parent.age += 1
             new_pop.append(parent)
-        # fill rest with mutated copies of selected parents
+        # fill rest with gradient-mutated clones of selected parents
+        pop_mean_fitness = float(np.mean([ind.fitness for ind in self.population]))
         while len(new_pop) < cfg.pop_size:
             pi = self._select_parents()
             parent = self.population[pi]
-            # clone parent's network
             child_net = self._clone_network(parent.network)
-            # mutate weights slightly (small Gaussian noise on weights)
-            with torch.no_grad():
-                for p in child_net.parameters():
-                    if p.requires_grad:
-                        p.add_(torch.randn_like(p) * 0.1)
+            # gradient-directed mutation: do a rollout with the child and apply
+            # one policy gradient step. The stochasticity of the rollout provides
+            # the "mutation" effect (different rollouts give different gradients).
+            obs_list, act_list, rew_list, _, _ = self._rollout(
+                child_net, self._env, cfg.max_steps, stochastic=True
+            )
+            self._policy_gradient_step(
+                child_net, obs_list, act_list, rew_list, cfg.lr_weights,
+                population_baseline=pop_mean_fitness
+            )
             new_pop.append(Individual(network=child_net))
         self.population = new_pop[: cfg.pop_size]
 
@@ -864,7 +901,9 @@ class GDTNEAT:
         # 5. Topology growth (reuse evaluation rollouts; collect gradients for pruning)
         for i, ind in enumerate(self.population):
             edge_grads = self._grow_topology(ind, all_rollouts[i])
-            self._maybe_split_edge(ind)
+            # split edge with highest gradient (instead of random)
+            if np.random.random() < self.cfg.p_split_edge:
+                self._maybe_split_edge(ind, edge_grads)
             self._prune(ind, i, edge_grads)
         # 6. Stats
         fits = np.array([ind.fitness for ind in self.population])
