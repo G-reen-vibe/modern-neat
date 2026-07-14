@@ -1,0 +1,282 @@
+{
+  "algorithm": "NEAT",
+  "benchmark": "MountainCar-v0",
+  "seed": 0,
+  "best_fitness": -115.0,
+  "elapsed_seconds": 18.76297640800476,
+  "extra": {
+    "n_evals": 4500
+  },
+  "history": [
+    {
+      "gen": 0,
+      "best": -200.0,
+      "mean": -200.0,
+      "std": 0.0,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 1,
+      "best": -190.33333333333334,
+      "mean": -199.80666666666667,
+      "std": 1.3533333333333322,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 2,
+      "best": -190.33333333333334,
+      "mean": -199.80666666666667,
+      "std": 1.3533333333333322,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 3,
+      "best": -190.33333333333334,
+      "mean": -199.80666666666667,
+      "std": 1.3533333333333322,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 4,
+      "best": -190.33333333333334,
+      "mean": -199.80666666666667,
+      "std": 1.3533333333333322,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 5,
+      "best": -190.33333333333334,
+      "mean": -199.80666666666667,
+      "std": 1.3533333333333322,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 6,
+      "best": -190.33333333333334,
+      "mean": -199.80666666666667,
+      "std": 1.3533333333333322,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 7,
+      "best": -190.33333333333334,
+      "mean": -199.80666666666667,
+      "std": 1.3533333333333322,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 8,
+      "best": -190.33333333333334,
+      "mean": -199.80666666666667,
+      "std": 1.3533333333333322,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 9,
+      "best": -147.66666666666666,
+      "mean": -198.76,
+      "std": 7.423398443061269,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 10,
+      "best": -147.66666666666666,
+      "mean": -198.95333333333332,
+      "std": 7.326666666666667,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 11,
+      "best": -147.66666666666666,
+      "mean": -198.95333333333332,
+      "std": 7.326666666666667,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 12,
+      "best": -147.66666666666666,
+      "mean": -198.18,
+      "std": 8.963930189623547,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 13,
+      "best": -118.66666666666667,
+      "mean": -196.85333333333335,
+      "std": 13.725104330710531,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 14,
+      "best": -118.66666666666667,
+      "mean": -198.37333333333336,
+      "std": 11.386666666666667,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 15,
+      "best": -118.66666666666667,
+      "mean": -198.37333333333336,
+      "std": 11.386666666666667,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 16,
+      "best": -115.0,
+      "mean": -196.67333333333335,
+      "std": 16.30139598657462,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 17,
+      "best": -115.0,
+      "mean": -198.3,
+      "std": 11.900000000000002,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 18,
+      "best": -115.0,
+      "mean": -198.3,
+      "std": 11.900000000000002,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 19,
+      "best": -115.0,
+      "mean": -198.3,
+      "std": 11.900000000000002,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 20,
+      "best": -115.0,
+      "mean": -198.3,
+      "std": 11.900000000000002,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 21,
+      "best": -115.0,
+      "mean": -198.3,
+      "std": 11.900000000000002,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 22,
+      "best": -115.0,
+      "mean": -198.3,
+      "std": 11.900000000000002,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 23,
+      "best": -115.0,
+      "mean": -196.66666666666669,
+      "std": 16.333333333333336,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 24,
+      "best": -115.0,
+      "mean": -198.3,
+      "std": 11.900000000000002,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 25,
+      "best": -115.0,
+      "mean": -198.3,
+      "std": 11.900000000000002,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 26,
+      "best": -115.0,
+      "mean": -198.3,
+      "std": 11.900000000000002,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 27,
+      "best": -115.0,
+      "mean": -198.3,
+      "std": 11.900000000000002,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 28,
+      "best": -115.0,
+      "mean": -198.3,
+      "std": 11.900000000000002,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    },
+    {
+      "gen": 29,
+      "best": -115.0,
+      "mean": -198.3,
+      "std": 11.900000000000002,
+      "n_species": 1,
+      "genome_size": 6,
+      "n_hidden": 0
+    }
+  ]
+}

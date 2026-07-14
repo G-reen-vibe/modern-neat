@@ -1,0 +1,74 @@
+{
+  "FixedGA|CartPole-v1": {
+    "n_seeds": 3,
+    "mean": 500.0,
+    "std": 0.0,
+    "min": 500.0,
+    "max": 500.0,
+    "ci95_half": 0.0
+  },
+  "DQN|CartPole-v1": {
+    "n_seeds": 1,
+    "mean": 251.33333333333334,
+    "std": 0.0,
+    "min": 251.33333333333334,
+    "max": 251.33333333333334,
+    "ci95_half": 0.0
+  },
+  "CMAES|CartPole-v1": {
+    "n_seeds": 3,
+    "mean": 500.0,
+    "std": 0.0,
+    "min": 500.0,
+    "max": 500.0,
+    "ci95_half": 0.0
+  },
+  "FixedGA|MountainCar-v0": {
+    "n_seeds": 2,
+    "mean": -156.83333333333334,
+    "std": 61.0468854424386,
+    "min": -200.0,
+    "max": -113.66666666666667,
+    "ci95_half": 84.60666666666665
+  },
+  "RandomSearch|CartPole-v1": {
+    "n_seeds": 3,
+    "mean": 500.0,
+    "std": 0.0,
+    "min": 500.0,
+    "max": 500.0,
+    "ci95_half": 0.0
+  },
+  "RandomSearch|MountainCar-v0": {
+    "n_seeds": 2,
+    "mean": -200.0,
+    "std": 0.0,
+    "min": -200.0,
+    "max": -200.0,
+    "ci95_half": 0.0
+  },
+  "NEAT|CartPole-v1": {
+    "n_seeds": 3,
+    "mean": 500.0,
+    "std": 0.0,
+    "min": 500.0,
+    "max": 500.0,
+    "ci95_half": 0.0
+  },
+  "NEAT|MountainCar-v0": {
+    "n_seeds": 2,
+    "mean": -117.66666666666666,
+    "std": 3.77123616632825,
+    "min": -120.33333333333333,
+    "max": -115.0,
+    "ci95_half": 5.226666666666661
+  },
+  "CMAES|MountainCar-v0": {
+    "n_seeds": 2,
+    "mean": -186.0,
+    "std": 19.79898987322333,
+    "min": -200.0,
+    "max": -172.0,
+    "ci95_half": 27.439999999999998
+  }
+}
