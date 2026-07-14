@@ -1,0 +1,326 @@
+"""
+Atlas-NEAT: Modern Quality-Diversity NeuroEvolution.
+
+Core innovation: Replaces NEAT's speciation mechanism with an adaptive
+Quality-Diversity archive. Networks are mapped to archive cells based on
+their topological and behavioral characteristics, maintaining diversity
+explicitly through the archive structure.
+"""
+
+import random
+import time
+import copy
+import numpy as np
+from typing import Dict, List, Tuple, Optional, Callable
+from dataclasses import dataclass, field
+
+from atlas_neat.genome import Genome, create_random_genome
+from atlas_neat.archive import AdaptiveArchive
+
+
+@dataclass
+class AtlasConfig:
+    """Configuration for Atlas-NEAT."""
+    # Population
+    pop_size: int = 150
+    
+    # Archive
+    archive_dims: int = 3
+    archive_resolution: int = 4
+    archive_max_resolution: int = 16
+    archive_adapt_interval: int = 10
+    
+    # Mutation rates
+    weight_mutate_prob: float = 0.9
+    weight_mutate_power: float = 0.5
+    weight_replace_prob: float = 0.1
+    bias_mutate_prob: float = 0.7
+    bias_mutate_power: float = 0.5
+    activation_mutate_rate: float = 0.1
+    conn_add_prob: float = 0.2
+    conn_remove_prob: float = 0.1
+    node_add_prob: float = 0.2
+    node_remove_prob: float = 0.05
+    toggle_prob: float = 0.01
+    
+    # Selection
+    selection_method: str = 'tournament'
+    tournament_size: int = 5
+    elitism: int = 2
+    
+    # Novelty-guided exploration
+    novelty_weight: float = 0.3  # Weight for novelty in parent selection
+    explore_prob: float = 0.2  # Probability of exploration-oriented mutation
+    
+    # Adaptive rates
+    adaptive_mutation: bool = True
+    mutation_boost: float = 2.0  # Multiply rates when diversity is low
+    
+    # Termination
+    max_generations: int = 100
+    fitness_threshold: float = 500.0
+
+
+class AtlasNEAT:
+    """
+    Atlas-NEAT: Quality-Diversity NeuroEvolution.
+    
+    Main differences from standard NEAT:
+    1. No speciation - diversity maintained by archive
+    2. No compatibility distance
+    3. No stagnation detection
+    4. Novelty-guided exploration
+    5. Adaptive mutation rates
+    """
+    
+    def __init__(self, config: AtlasConfig, num_inputs: int, num_outputs: int):
+        self.config = config
+        self.num_inputs = num_inputs
+        self.num_outputs = num_outputs
+        
+        # Archive for quality-diversity
+        self.archive = AdaptiveArchive(
+            n_dimensions=config.archive_dims,
+            initial_resolution=config.archive_resolution,
+            max_resolution=config.archive_max_resolution,
+            adapt_interval=config.archive_adapt_interval
+        )
+        
+        # Population
+        self.population: Dict[int, Genome] = {}
+        self.generation = 0
+        self.next_genome_key = 0
+        
+        # Statistics
+        self.history = {
+            'best_fitness': [],
+            'avg_fitness': [],
+            'coverage': [],
+            'qd_score': [],
+            'n_species': [],  # Actually n_occupied cells
+            'mutation_rates': [],
+            'times': [],
+        }
+    
+    def create_population(self, pop_size: Optional[int] = None):
+        """Create initial population of minimal genomes."""
+        if pop_size is None:
+            pop_size = self.config.pop_size
+        
+        Genome.reset_innovation()
+        self.population = {}
+        
+        for i in range(pop_size):
+            genome = create_random_genome(i, self.num_inputs, self.num_outputs)
+            self.population[i] = genome
+            self.next_genome_key = i + 1
+    
+    def evaluate_population(self, eval_func: Callable[[Genome], float]):
+        """Evaluate all genomes in the population."""
+        for genome in self.population.values():
+            if genome.fitness is None:
+                genome.fitness = eval_func(genome)
+    
+    def update_archive(self):
+        """Add all population members to the archive."""
+        for genome in self.population.values():
+            self.archive.add(genome)
+    
+    def get_mutation_config(self) -> dict:
+        """Get mutation configuration, possibly adapted."""
+        config = {
+            'weight_mutate_prob': self.config.weight_mutate_prob,
+            'weight_mutate_power': self.config.weight_mutate_power,
+            'weight_replace_prob': self.config.weight_replace_prob,
+            'bias_mutate_prob': self.config.bias_mutate_prob,
+            'bias_mutate_power': self.config.bias_mutate_power,
+            'activation_mutate_rate': self.config.activation_mutate_rate,
+            'conn_add_prob': self.config.conn_add_prob,
+            'conn_remove_prob': self.config.conn_remove_prob,
+            'node_add_prob': self.config.node_add_prob,
+            'node_remove_prob': self.config.node_remove_prob,
+            'toggle_prob': self.config.toggle_prob,
+        }
+        
+        if self.config.adaptive_mutation:
+            coverage = self.archive.get_coverage()
+            if coverage < 0.3:
+                # Low diversity - boost mutation rates
+                boost = self.config.mutation_boost
+                for key in ['conn_add_prob', 'node_add_prob', 'activation_mutate_rate']:
+                    config[key] = min(1.0, config[key] * boost)
+        
+        return config
+    
+    def create_offspring(self) -> Genome:
+        """Create a single offspring through selection and mutation."""
+        # Decide: mutation-only or crossover
+        if random.random() < 0.75 or len(self.archive) < 2:
+            # Asexual reproduction with mutation
+            parent = self.archive.sample_parent(
+                self.config.selection_method,
+                self.config.tournament_size
+            )
+            
+            if parent is None:
+                # Fallback: random from population
+                parent = random.choice(list(self.population.values()))
+            
+            child = copy.deepcopy(parent)
+            child.key = self.next_genome_key
+            self.next_genome_key += 1
+            child.fitness = None
+            
+            # Check if we should do exploration-oriented mutation
+            if random.random() < self.config.explore_prob:
+                # Boost structural mutations
+                mut_config = self.get_mutation_config()
+                mut_config['conn_add_prob'] = min(1.0, mut_config['conn_add_prob'] * 2)
+                mut_config['node_add_prob'] = min(1.0, mut_config['node_add_prob'] * 2)
+                mut_config['activation_mutate_rate'] = min(1.0, mut_config['activation_mutate_rate'] * 2)
+                child.mutate(mut_config)
+            else:
+                child.mutate(self.get_mutation_config())
+        else:
+            # Crossover
+            parent1 = self.archive.sample_parent(
+                self.config.selection_method,
+                self.config.tournament_size
+            )
+            parent2 = self.archive.sample_parent(
+                self.config.selection_method,
+                self.config.tournament_size
+            )
+            
+            if parent1 is None:
+                parent1 = random.choice(list(self.population.values()))
+            if parent2 is None:
+                parent2 = random.choice(list(self.population.values()))
+            
+            child = parent1.crossover(parent2)
+            child.key = self.next_genome_key
+            self.next_genome_key += 1
+            child.fitness = None
+            child.mutate(self.get_mutation_config())
+        
+        return child
+    
+    def create_next_generation(self):
+        """Create the next generation."""
+        new_population = {}
+        
+        # Elitism: keep best from archive
+        archive_best = self.archive.get_best()
+        if archive_best is not None:
+            for i in range(self.config.elitism):
+                elite = copy.deepcopy(archive_best)
+                elite.key = self.next_genome_key
+                self.next_genome_key += 1
+                new_population[elite.key] = elite
+        
+        # Fill rest with offspring
+        while len(new_population) < self.config.pop_size:
+            child = self.create_offspring()
+            new_population[child.key] = child
+        
+        self.population = new_population
+        self.generation += 1
+        self.archive.generation = self.generation
+    
+    def run_generation(self, eval_func: Callable[[Genome], float]) -> dict:
+        """Run a single generation. Returns statistics."""
+        gen_start = time.time()
+        
+        # Evaluate
+        self.evaluate_population(eval_func)
+        
+        # Update archive
+        self.update_archive()
+        
+        # Adapt archive resolution
+        self.archive.adapt_resolution()
+        
+        # Create next generation
+        self.create_next_generation()
+        
+        # Collect stats
+        fitnesses = [g.fitness for g in self.population.values() if g.fitness is not None]
+        best_fitness = max(fitnesses) if fitnesses else -9999
+        avg_fitness = sum(fitnesses) / len(fitnesses) if fitnesses else 0
+        
+        diversity = self.archive.get_diversity_stats()
+        
+        gen_time = time.time() - gen_start
+        
+        self.history['best_fitness'].append(float(best_fitness))
+        self.history['avg_fitness'].append(float(avg_fitness))
+        self.history['coverage'].append(diversity['coverage'])
+        self.history['qd_score'].append(diversity['qd_score'])
+        self.history['n_species'].append(diversity['n_occupied'])
+        self.history['times'].append(gen_time)
+        
+        return {
+            'generation': self.generation,
+            'best_fitness': best_fitness,
+            'avg_fitness': avg_fitness,
+            'coverage': diversity['coverage'],
+            'qd_score': diversity['qd_score'],
+            'n_occupied': diversity['n_occupied'],
+            'resolution': self.archive.resolution,
+            'time': gen_time,
+        }
+    
+    def run(self, eval_func: Callable[[Genome], float], 
+            generations: Optional[int] = None,
+            callback: Optional[Callable] = None) -> dict:
+        """
+        Run Atlas-NEAT evolution.
+        
+        Args:
+            eval_func: Function that takes a Genome and returns fitness
+            generations: Max generations (default from config)
+            callback: Optional callback(stats) called each generation
+        
+        Returns:
+            Final statistics and history
+        """
+        if generations is None:
+            generations = self.config.max_generations
+        
+        print(f"Atlas-NEAT: Starting evolution")
+        print(f"  Population: {self.config.pop_size}")
+        print(f"  Archive: {self.archive.resolution}^{self.config.archive_dims} = "
+              f"{self.archive.resolution ** self.config.archive_dims} cells")
+        
+        for gen in range(generations):
+            stats = self.run_generation(eval_func)
+            
+            print(f"Gen {stats['generation']}: Best={stats['best_fitness']:.2f}, "
+                  f"Avg={stats['avg_fitness']:.2f}, Coverage={stats['coverage']:.2%}, "
+                  f"QD={stats['qd_score']:.1f}, Cells={stats['n_occupied']}, "
+                  f"Res={stats['resolution']}, Time={stats['time']:.2f}s")
+            
+            if callback:
+                callback(stats)
+            
+            # Check termination
+            if stats['best_fitness'] >= self.config.fitness_threshold:
+                print(f"Fitness threshold reached at generation {gen}!")
+                break
+        
+        return {
+            'history': self.history,
+            'best_genome': self.archive.get_best(),
+            'best_fitness': self.archive.get_best_fitness(),
+            'archive': self.archive,
+            'final_stats': stats,
+        }
+
+
+def create_atlas_neat(num_inputs: int, num_outputs: int, 
+                      pop_size: int = 150, **kwargs) -> AtlasNEAT:
+    """Convenience function to create an Atlas-NEAT instance."""
+    config = AtlasConfig(pop_size=pop_size, **kwargs)
+    atlas = AtlasNEAT(config, num_inputs, num_outputs)
+    atlas.create_population()
+    return atlas
