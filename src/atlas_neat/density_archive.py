@@ -280,6 +280,57 @@ class DensityArchive:
         else:
             return random.choice(candidates)
     
+    def get_silhouette_score(self) -> float:
+        """
+        Compute approximate silhouette score for clustering quality.
+        Higher is better (range: -1 to 1).
+        """
+        if len(self.clusters) < 2:
+            return 0.0
+        
+        # Collect all genomes with their cluster assignments
+        genome_descs = []
+        genome_clusters = []
+        for cid, cluster in self.clusters.items():
+            for member in cluster.members:
+                desc = np.array(member.get_characterization())
+                genome_descs.append(desc)
+                genome_clusters.append(cid)
+        
+        if len(genome_descs) < 3:
+            return 0.0
+        
+        # Compute silhouette for a sample
+        sample_size = min(50, len(genome_descs))
+        indices = random.sample(range(len(genome_descs)), sample_size)
+        
+        scores = []
+        for idx in indices:
+            desc = genome_descs[idx]
+            own_cluster = genome_clusters[idx]
+            
+            # a: mean distance to own cluster
+            own_dists = [np.linalg.norm(desc - genome_descs[j]) 
+                        for j in range(len(genome_descs))
+                        if genome_clusters[j] == own_cluster and j != idx]
+            a = np.mean(own_dists) if own_dists else 0
+            
+            # b: mean distance to nearest other cluster
+            other_means = []
+            for other_cid in set(genome_clusters):
+                if other_cid != own_cluster:
+                    other_dists = [np.linalg.norm(desc - genome_descs[j])
+                                  for j in range(len(genome_descs))
+                                  if genome_clusters[j] == other_cid]
+                    if other_dists:
+                        other_means.append(np.mean(other_dists))
+            b = min(other_means) if other_means else a + 1
+            
+            score = (b - a) / max(a, b) if max(a, b) > 0 else 0
+            scores.append(score)
+        
+        return float(np.mean(scores))
+    
     def get_diversity_stats(self) -> dict:
         """Get diversity statistics."""
         n_clusters = len(self.clusters)

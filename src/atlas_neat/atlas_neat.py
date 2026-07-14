@@ -102,6 +102,10 @@ class AtlasNEAT:
         self.generation = 0
         self.next_genome_key = 0
         
+        # Memory: hall of fame
+        self.hall_of_fame: List[Genome] = []
+        self.hof_size: int = 10
+        
         # Statistics
         self.history = {
             'best_fitness': [],
@@ -194,6 +198,26 @@ class AtlasNEAT:
                     config[key] = min(1.0, config[key] * boost)
         
         return config
+    
+    def _update_hof(self):
+        """Update hall of fame with current best genomes."""
+        current_best = sorted(
+            self.population.values(),
+            key=lambda g: getattr(g, 'raw_fitness', g.fitness) or -9999,
+            reverse=True
+        )[:3]
+        
+        for genome in current_best:
+            # Check if already in HOF
+            if not any(g.key == genome.key for g in self.hall_of_fame):
+                self.hall_of_fame.append(copy.deepcopy(genome))
+        
+        # Keep only top N
+        self.hall_of_fame.sort(
+            key=lambda g: getattr(g, 'raw_fitness', g.fitness) or -9999,
+            reverse=True
+        )
+        self.hall_of_fame = self.hall_of_fame[:self.hof_size]
     
     def select_parent(self) -> Genome:
         """
@@ -333,15 +357,22 @@ class AtlasNEAT:
                         child.mutate(self.get_mutation_config())
                         new_population[child.key] = child
         
-        # Diversity injection: add random immigrants
+        # Diversity injection: add random immigrants and HOF reintroductions
         n_immigrants = int(self.config.pop_size * self.config.immigrant_rate)
-        for _ in range(n_immigrants):
+        for i in range(n_immigrants):
             if len(new_population) >= self.config.pop_size:
                 break
-            # Create a fresh random genome
-            immigrant = create_random_genome(self.next_genome_key, 
-                                            self.num_inputs, self.num_outputs)
-            self.next_genome_key += 1
+            # 50% chance of HOF reintroduction vs random immigrant
+            if self.hall_of_fame and random.random() < 0.5:
+                hof_genome = random.choice(self.hall_of_fame)
+                immigrant = copy.deepcopy(hof_genome)
+                immigrant.key = self.next_genome_key
+                immigrant.fitness = None
+                self.next_genome_key += 1
+            else:
+                immigrant = create_random_genome(self.next_genome_key, 
+                                                self.num_inputs, self.num_outputs)
+                self.next_genome_key += 1
             new_population[immigrant.key] = immigrant
         
         # Fill any remaining slots
@@ -362,6 +393,9 @@ class AtlasNEAT:
         
         # Update archive
         self.update_archive()
+        
+        # Update hall of fame
+        self._update_hof()
         
         # Update density clusters
         self.archive.update()

@@ -79,6 +79,13 @@ class Genome:
         self.output_entropy = 0.0
         self.action_entropy = 0.0  # Entropy of actions taken during episode
         
+        # Meta-mutation: each genome has its own mutation rates
+        self.meta_rates = {
+            'weight_mutate_power': 0.5,
+            'conn_add_prob': 0.2,
+            'node_add_prob': 0.2,
+        }
+        
         # Create input nodes
         for i in range(num_inputs):
             self.nodes[i] = NodeGene(i, 'input', 'identity')
@@ -321,11 +328,56 @@ class Genome:
             # Skip connections use small initial weights
             self.add_connection(in_id, out_id, random.gauss(0, 0.01))
     
+    def gradient_update(self, eval_func, step_size: float = 0.01, n_samples: int = 4):
+        """
+        Perform a gradient-like weight update using finite differences.
+        Evaluates n_samples perturbed versions and moves weights toward
+        the direction of improvement.
+        """
+        # Get baseline fitness
+        baseline = eval_func(self)
+        
+        # Collect enabled connections
+        enabled_conns = [(k, c) for k, c in self.connections.items() if c.enabled]
+        if not enabled_conns:
+            return
+        
+        # Sample a subset of connections to update
+        n_update = max(1, len(enabled_conns) // 4)
+        to_update = random.sample(enabled_conns, min(n_update, len(enabled_conns)))
+        
+        for key, conn in to_update:
+            # Estimate gradient via finite differences
+            improvements = []
+            for _ in range(n_samples):
+                delta = random.gauss(0, step_size)
+                conn.weight += delta
+                fit = eval_func(self)
+                conn.weight -= delta  # Restore
+                improvements.append((fit - baseline) / delta if delta != 0 else 0)
+            
+            # Update weight in direction of improvement
+            grad = np.mean(improvements)
+            conn.weight += step_size * grad
+            conn.weight = np.clip(conn.weight, -30, 30)
+    
+    def mutate_meta(self, meta_rate: float = 0.1):
+        """Mutate this genome's own mutation rates (meta-mutation)."""
+        for key in self.meta_rates:
+            if random.random() < meta_rate:
+                self.meta_rates[key] *= random.gauss(1.0, 0.2)
+                self.meta_rates[key] = max(0.01, min(1.0, self.meta_rates[key]))
+    
     def mutate(self, config: dict):
-        """Apply all mutation operators."""
+        """Apply all mutation operators using genome-specific rates."""
+        # Override global config with genome-specific meta-rates
+        weight_power = self.meta_rates.get('weight_mutate_power', config.get('weight_mutate_power', 0.5))
+        conn_add = self.meta_rates.get('conn_add_prob', config.get('conn_add_prob', 0.2))
+        node_add = self.meta_rates.get('node_add_prob', config.get('node_add_prob', 0.2))
+        
         self.mutate_weight(
             config.get('weight_mutate_prob', 0.9),
-            config.get('weight_mutate_power', 0.5),
+            weight_power,
             config.get('weight_replace_prob', 0.1)
         )
         self.mutate_bias(
@@ -333,12 +385,15 @@ class Genome:
             config.get('bias_mutate_power', 0.5)
         )
         self.mutate_activation(config.get('activation_mutate_rate', 0.1))
-        self.mutate_add_connection(config.get('conn_add_prob', 0.2))
-        self.mutate_add_node(config.get('node_add_prob', 0.2))
+        self.mutate_add_connection(conn_add)
+        self.mutate_add_node(node_add)
         self.mutate_add_skip(config.get('skip_add_prob', 0.05))
         self.mutate_toggle_connection(config.get('toggle_prob', 0.01))
         self.mutate_remove_connection(config.get('conn_remove_prob', 0.1))
         self.mutate_remove_node(config.get('node_remove_prob', 0.05))
+        
+        # Also mutate the mutation rates themselves
+        self.mutate_meta(config.get('meta_mutate_rate', 0.1))
     
     def compatibility_distance(self, other: 'Genome') -> float:
         """Compute NEAT-style compatibility distance."""
