@@ -31,10 +31,11 @@ class Cluster:
         self.best_genome: Optional[Genome] = None
         self.age: int = 0
     
-    def add(self, genome: Genome, descriptor: np.ndarray):
+    def add(self, genome: Genome, descriptor: np.ndarray, fitness: Optional[float] = None):
         self.members.append(genome)
-        if genome.fitness and genome.fitness > self.best_fitness:
-            self.best_fitness = genome.fitness
+        fit = fitness if fitness is not None else (genome.fitness or -9999.0)
+        if fit > self.best_fitness:
+            self.best_fitness = fit
             self.best_genome = genome
     
     def update_centroid(self):
@@ -96,14 +97,17 @@ class DensityArchive:
         """Add a genome to the archive (assign to cluster or noise)."""
         descriptor = np.array(genome.get_characterization())
         
+        # Use adjusted fitness if available
+        fitness = getattr(genome, 'adjusted_fitness', genome.fitness) or -9999.0
+        
         # Try to assign to existing cluster
         nearest = self._find_nearest_cluster(descriptor)
         
         if nearest is not None:
-            self.clusters[nearest].add(genome, descriptor)
+            self.clusters[nearest].add(genome, descriptor, fitness)
         else:
             # Add to noise (may form new cluster later)
-            self.noise_points.append((genome, descriptor))
+            self.noise_points.append((genome, descriptor, fitness))
     
     def _form_clusters_from_noise(self):
         """Try to form new clusters from noise points."""
@@ -117,14 +121,16 @@ class DensityArchive:
         while len(unassigned) >= self.min_samples:
             # Pick a random seed point
             seed_idx = random.randrange(len(unassigned))
-            seed_genome, seed_desc = unassigned[seed_idx]
+            seed_point = unassigned[seed_idx]
+            seed_genome, seed_desc = seed_point[0], seed_point[1]
             
             # Find all points within eps
             neighbors = []
             neighbor_indices = []
-            for i, (g, d) in enumerate(unassigned):
+            for i, point in enumerate(unassigned):
+                g, d = point[0], point[1]
                 if self._distance(seed_desc, d) < self.eps:
-                    neighbors.append((g, d))
+                    neighbors.append(point)
                     neighbor_indices.append(i)
             
             if len(neighbors) >= self.min_samples:
@@ -132,8 +138,9 @@ class DensityArchive:
                 cluster = Cluster(self.next_cluster_id)
                 self.next_cluster_id += 1
                 
-                for g, d in neighbors:
-                    cluster.add(g, d)
+                for point in neighbors:
+                    g, d, fit = point[0], point[1], point[2] if len(point) > 2 else None
+                    cluster.add(g, d, fit)
                 
                 cluster.update_centroid()
                 new_clusters.append(cluster)
@@ -151,6 +158,16 @@ class DensityArchive:
         
         # Remaining unassigned stays as noise
         self.noise_points = unassigned
+    
+    def _adapt_epsilon(self, target_clusters: int = 8):
+        """Adapt epsilon to achieve target number of clusters."""
+        n_clusters = len(self.clusters)
+        if n_clusters < target_clusters * 0.5:
+            # Too few clusters - shrink epsilon
+            self.eps = max(0.1, self.eps * 0.95)
+        elif n_clusters > target_clusters * 2:
+            # Too many clusters - grow epsilon
+            self.eps = min(0.8, self.eps * 1.05)
     
     def update(self, stagnation_limit: int = 15):
         """
@@ -182,6 +199,9 @@ class DensityArchive:
         # Clear members for next generation
         for cluster in self.clusters.values():
             cluster.clear_members()
+        
+        # Adapt epsilon
+        self._adapt_epsilon()
         
         self.generation += 1
     

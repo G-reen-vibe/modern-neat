@@ -56,6 +56,7 @@ def create_evaluator(env_name: str, episodes: int = 3, max_steps: int = 500,
     def evaluate(genome: Genome) -> float:
         """Evaluate a genome on the environment."""
         network = genome.create_network()
+        action_history = []
         
         total_reward = 0.0
         for ep in range(episodes):
@@ -70,8 +71,11 @@ def create_evaluator(env_name: str, episodes: int = 3, max_steps: int = 500,
                 
                 if action_type == 'discrete':
                     action = int(np.argmax(outputs))
+                    action_history.append(action)
                 else:
                     action = np.array(outputs).clip(act_low, act_high)
+                    # For continuous, bin the actions for entropy
+                    action_history.append(int(np.sign(action[0]) + 1))
                 
                 obs, reward, terminated, truncated, info = env.step(action)
                 episode_reward += reward
@@ -85,6 +89,15 @@ def create_evaluator(env_name: str, episodes: int = 3, max_steps: int = 500,
         eval_counter[0] += 1
         fitness = total_reward / episodes
         genome.fitness = fitness
+        
+        # Compute action entropy from history if discrete actions
+        if action_type == 'discrete' and action_history:
+            from collections import Counter
+            counts = Counter(action_history)
+            total = len(action_history)
+            probs = [c / total for c in counts.values()]
+            genome.action_entropy = -sum(p * np.log(p + 1e-10) for p in probs)
+        
         return fitness
     
     return evaluate

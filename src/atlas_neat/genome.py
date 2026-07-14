@@ -77,6 +77,7 @@ class Genome:
         # Behavioral stats (computed during evaluation)
         self.activation_sparsity = 0.0
         self.output_entropy = 0.0
+        self.action_entropy = 0.0  # Entropy of actions taken during episode
         
         # Create input nodes
         for i in range(num_inputs):
@@ -339,9 +340,40 @@ class Genome:
         self.mutate_remove_connection(config.get('conn_remove_prob', 0.1))
         self.mutate_remove_node(config.get('node_remove_prob', 0.05))
     
+    def compatibility_distance(self, other: 'Genome') -> float:
+        """Compute NEAT-style compatibility distance."""
+        if not self.connections or not other.connections:
+            return 100.0
+        
+        # Count matching genes
+        matching = 0
+        disjoint = 0
+        weight_diff = 0.0
+        
+        self_innovs = {c.innov: c for c in self.connections.values()}
+        other_innovs = {c.innov: c for c in other.connections.values()}
+        
+        all_innovs = set(self_innovs.keys()) | set(other_innovs.keys())
+        max_innov = max(all_innovs) if all_innovs else 1
+        
+        for innov in all_innovs:
+            if innov in self_innovs and innov in other_innovs:
+                matching += 1
+                weight_diff += abs(self_innovs[innov].weight - other_innovs[innov].weight)
+            else:
+                disjoint += 1
+        
+        if matching == 0:
+            return disjoint + weight_diff
+        
+        # NEAT compatibility: c1 * disjoint/N + c2 * weight_diff/matching
+        n = max(len(self.connections), len(other.connections))
+        n = max(n, 1)
+        return (1.0 * disjoint / n) + (0.5 * weight_diff / matching)
+    
     def crossover(self, other: 'Genome') -> 'Genome':
         """
-        Crossover with another genome using historical markings.
+        Crossover with another genome using historical markings (NEAT-style).
         Returns a new child genome.
         """
         child = Genome(
@@ -352,46 +384,51 @@ class Genome:
         child.nodes = {}
         child.connections = {}
         
-        # Inherit nodes from more fit parent
-        if (other.fitness or -9999) > (self.fitness or -9999):
+        # Determine more fit parent
+        self_adj = getattr(self, 'adjusted_fitness', self.fitness) or -9999
+        other_adj = getattr(other, 'adjusted_fitness', other.fitness) or -9999
+        if other_adj > self_adj:
             primary, secondary = other, self
         else:
             primary, secondary = self, other
         
-        # Merge nodes
+        # Merge nodes: all nodes from both parents
         all_node_ids = set(primary.nodes.keys()) | set(secondary.nodes.keys())
         for nid in all_node_ids:
             if nid in primary.nodes and nid in secondary.nodes:
-                # Matching - randomly choose
                 child.nodes[nid] = copy.deepcopy(
                     primary.nodes[nid] if random.random() < 0.5 else secondary.nodes[nid]
                 )
             elif nid in primary.nodes:
-                # Disjoint/excess from primary
                 child.nodes[nid] = copy.deepcopy(primary.nodes[nid])
             else:
-                # Disjoint/excess from secondary
                 child.nodes[nid] = copy.deepcopy(secondary.nodes[nid])
         
-        # Merge connections
-        all_conn_keys = set(primary.connections.keys()) | set(secondary.connections.keys())
-        for ck in all_conn_keys:
-            if ck in primary.connections and ck in secondary.connections:
-                # Matching - randomly choose
-                child.connections[ck] = copy.deepcopy(
-                    primary.connections[ck] if random.random() < 0.5 else secondary.connections[ck]
-                )
-            elif ck in primary.connections:
-                child.connections[ck] = copy.deepcopy(primary.connections[ck])
+        # Merge connections by innovation number (NEAT-style)
+        primary_innovs = {c.innov: c for c in primary.connections.values()}
+        secondary_innovs = {c.innov: c for c in secondary.connections.values()}
+        all_innovs = set(primary_innovs.keys()) | set(secondary_innovs.keys())
+        
+        for innov in all_innovs:
+            if innov in primary_innovs and innov in secondary_innovs:
+                # Matching gene - randomly choose from either parent
+                child.connections[(primary_innovs[innov].in_node, primary_innovs[innov].out_node)] = \
+                    copy.deepcopy(primary_innovs[innov] if random.random() < 0.5 else secondary_innovs[innov])
+            elif innov in primary_innovs:
+                # Disjoint/excess - inherit from more fit parent
+                conn = primary_innovs[innov]
+                child.connections[(conn.in_node, conn.out_node)] = copy.deepcopy(conn)
             else:
-                child.connections[ck] = copy.deepcopy(secondary.connections[ck])
+                # Only in secondary
+                conn = secondary_innovs[innov]
+                child.connections[(conn.in_node, conn.out_node)] = copy.deepcopy(conn)
         
         return child
     
-    def get_characterization(self) -> Tuple[float, float, float, float, float]:
+    def get_characterization(self) -> Tuple[float, float, float, float, float, float]:
         """
-        Get the 5D behavioral-topological characterization.
-        Returns (depth, hidden_ratio, conn_ratio, activation_diversity, weight_sparsity)
+        Get the 6D behavioral-topological characterization.
+        Returns (depth, hidden_ratio, conn_ratio, activation_diversity, weight_sparsity, action_entropy)
         Each dimension is normalized to [0, 1].
         """
         input_ids = set(n.id for n in self.nodes.values() if n.node_type == 'input')
@@ -432,7 +469,11 @@ class Genome:
         else:
             sparsity = 0.0
         
-        return (depth_norm, hidden_ratio, conn_ratio, act_diversity, sparsity)
+        # Dimension 6: Action entropy (behavioral diversity during episode)
+        # Normalize: high entropy = exploring, low entropy = exploiting
+        act_ent = min(self.action_entropy / 2.0, 1.0)
+        
+        return (depth_norm, hidden_ratio, conn_ratio, act_diversity, sparsity, act_ent)
     
     def _compute_depth(self, input_ids: set, output_ids: set) -> int:
         """Compute longest path from any input to any output."""

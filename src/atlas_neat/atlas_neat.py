@@ -48,6 +48,10 @@ class AtlasConfig:
     tournament_size: int = 5
     elitism: int = 2
     
+    # Multi-objective: fitness + complexity penalty (prefer simpler solutions)
+    complexity_penalty: float = 0.01  # Penalty per connection+node
+    use_multi_objective: bool = True
+    
     # Novelty-guided exploration
     novelty_weight: float = 0.3  # Weight for novelty in parent selection
     explore_prob: float = 0.2  # Probability of exploration-oriented mutation
@@ -114,11 +118,28 @@ class AtlasNEAT:
             self.population[i] = genome
             self.next_genome_key = i + 1
     
+    def _compute_adjusted_fitness(self, genome: Genome) -> float:
+        """Compute multi-objective adjusted fitness (fitness - complexity_penalty)."""
+        if genome.fitness is None:
+            return -9999.0
+        if not self.config.use_multi_objective:
+            return genome.fitness
+        
+        # Penalize complexity to prefer simpler solutions
+        complexity = len(genome.nodes) + sum(1 for c in genome.connections.values() if c.enabled)
+        penalty = self.config.complexity_penalty * complexity
+        
+        # Direction-aware: for maximization, subtract penalty; for minimization, add penalty
+        # Assume maximization by default (standard for RL)
+        return genome.fitness - penalty
+    
     def evaluate_population(self, eval_func: Callable[[Genome], float]):
         """Evaluate all genomes in the population."""
         for genome in self.population.values():
             if genome.fitness is None:
-                genome.fitness = eval_func(genome)
+                raw_fitness = eval_func(genome)
+                # Store adjusted fitness for selection
+                genome.adjusted_fitness = self._compute_adjusted_fitness(genome)
     
     def update_archive(self):
         """Add all population members to the archive."""
@@ -178,7 +199,7 @@ class AtlasNEAT:
                 return random.choice(candidates)
             
             contestants = random.sample(candidates, self.config.tournament_size)
-            return max(contestants, key=lambda g: g.fitness or -9999)
+            return max(contestants, key=lambda g: getattr(g, 'adjusted_fitness', g.fitness) or -9999)
         else:
             # Archive well-populated - use archive selection
             parent = self.archive.sample_parent(
@@ -248,9 +269,10 @@ class AtlasNEAT:
             cluster_scores = {}
             total_score = 0
             for cid, cluster in self.archive.clusters.items():
-                # Score = best_fitness + novelty bonus for young clusters
-                age_penalty = max(0, 1.0 - cluster.age * 0.05)  # Young clusters get bonus
-                score = max(cluster.best_fitness, 0.01) * (1.0 + age_penalty)
+                # Score = best_fitness + bonus for young/improving clusters
+                young_bonus = max(0, 1.0 - cluster.age * 0.2) * 0.5
+                size_bonus = min(0.3, len(cluster.members) * 0.05)
+                score = max(cluster.best_fitness, 0.01) * (1.0 + young_bonus + size_bonus)
                 cluster_scores[cid] = score
                 total_score += score
             
